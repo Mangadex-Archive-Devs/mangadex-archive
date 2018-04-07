@@ -15,13 +15,25 @@ const _req = (data, res, rej) => {
 	data[HTTP2_HEADER_USER_AGENT] = ua;
 	console.log(data)
 	const _ = manga.request(data)
-	_.on('response', onResponse.bind(_, data, res, rej));
+	_.on('response', onMangaResponse.bind(_, data, res, rej));
 };
 const jsonred = ({d = new util.TextDecoder, t = ''} = {}, buf, i, {length}) => ({d, t:t+d.decode(buf,{stream:i!==length})});
 // lol
 const ms = 1e3;
 const genres = ',4-koma,Action,Adventure,Award Winning,Comedy,Cooking,Doujinshi,Drama,Ecchi,Fantasy,Gender Bender,Harem,Historical,Horror,Josei,Martial Arts,Mecha,Medical,Music,Mystery,Oneshot,Psychological,Romance,School Life,Sci-Fi,Seinen,Shoujo,Shoujo Ai,Shounen,Shounen Ai,Slice of Life,Smut,Sports,Supernatural,Tragedy,Webtoon,Yaoi,Yuri,[no chapters],Game'.split(',').map((genre, genreid) => ({genre: genre || null, genreid}))
 const stati = 'unknown,ongoing,completed'.split(',').map((stat, n)=>({'status':stat,statusid:n}));
+const sort = (a, b) => (
+  !isNaN(a.volume) 
+  && !isNaN(b.volume) 
+  && (Number.parseInt(a.volume) - Number.parseInt(b.volume)) !== 0
+) ? Number.parseInt(a.volume) - Number.parseInt(b.volume)
+  : (
+    !isNaN(a.chapter)
+    && !isNaN(b.chapter)
+    && (Number.parseFloat(a.chapter) - Number.parseFloat(b.chapter)) !== 0
+  ) ? Number.parseFloat(a.chapter) - Number.parseFloat(b.chapter)
+    : a.timestamp.valueOf() - b.timestamp.valueOf()
+
 const jsonrev = (k,v) => {
 	switch (k) {
 		case 'timestamp': return new Date(v*ms);
@@ -30,15 +42,21 @@ const jsonrev = (k,v) => {
 			return a;
 		},[]);
 		case 'status': return stati[v] || {'status':'unknown',statusid:v}
+		case 'chapter': console.log(v)
+			if ('string' === typeof v) return v
+			console.log(v)
+			let keys = Object.keys(v);
+			let a = keys.reduce((A,key)=>[...A,{cid:Number.parseInt(key,10),...v[key]}],[]).sort(sort);
+			return a;
 		default: return v;
 	};
 };
 
-async function onResponse(data, res, rej, heads, flags) {
+async function onMangaResponse(data, res, rej, heads, flags) {
 	let d = []
 	this.on('data', d.push.bind(d));
 	if (heads[HTTP2_HEADER_STATUS] !== 200) {
-		
+		throw heads
 	};
 	this.on('end', () => {
 		const j = JSON.parse(d.reduce(jsonred, {d:new util.TextDecoder}).t, jsonrev);
