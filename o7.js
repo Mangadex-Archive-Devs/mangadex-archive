@@ -116,8 +116,8 @@ async function onChapterResponse(data, res, rej, heads, flags) {
 	})
 };
 const request = (path, onr) => new Promise(_req.bind(null,'string' === typeof path ? {[HTTP2_HEADER_PATH]:path,endStream:false} : path, onr));
-const getManga = id => request(`/api/3640f3fb/${id}`, onMangaResponse)
-const getChapter = id => request(`/chapter/${id}`, onChapterResponse)
+const getManga = mid => request(`/api/3640f3fb/${mid}`, onMangaResponse)
+const getChapter = cid => request(`/chapter/${cid}`, onChapterResponse)
 
 module.exports = {manga, request, getManga, getChapter}
 
