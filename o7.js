@@ -98,7 +98,6 @@ const jsonrev = (k,v) => {
 		case 'status': return stati[v] || {'status':'unknown',statusid:v}
 		case 'chapter': console.log(v)
 			if ('string' === typeof v) return v
-			console.log(v)
 			let keys = Object.keys(v);
 			let a = keys.reduce((A,key)=>[...A,{cid:Number.parseInt(key,10),...v[key]}],[]).sort(sort).map(chrewrite);
 			return a;
