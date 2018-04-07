@@ -11,13 +11,13 @@ const manga = http2.connect('https://mangadex.org');
 manga.pinging = setInterval(manga.ping.bind(manga, d=>console.log('ping',d)), 3e4)
 const ua = 'Mozilla/5.0 (Windows NT 6.3; WOW64)'
 
-const _req = (data, res, rej) => {
+const _req = (data, onr, res, rej) => {
 	data[HTTP2_HEADER_USER_AGENT] = ua;
 	console.log(data)
 	const _ = manga.request(data)
-	_.on('response', onMangaResponse.bind(_, data, res, rej));
+	_.on('response', onr.bind(_, data, res, rej));
 };
-const jsonred = ({d = new util.TextDecoder, t = ''} = {}, buf, i, {length}) => ({d, t:t+d.decode(buf,{stream:i!==length})});
+const rtx = ({d = new util.TextDecoder, t = ''} = {}, buf, i, {length}) => ({d, t:t+d.decode(buf,{stream:i!==length})});
 // lol
 const ms = 1e3;
 const genres = ',4-koma,Action,Adventure,Award Winning,Comedy,Cooking,Doujinshi,Drama,Ecchi,Fantasy,Gender Bender,Harem,Historical,Horror,Josei,Martial Arts,Mecha,Medical,Music,Mystery,Oneshot,Psychological,Romance,School Life,Sci-Fi,Seinen,Shoujo,Shoujo Ai,Shounen,Shounen Ai,Slice of Life,Smut,Sports,Supernatural,Tragedy,Webtoon,Yaoi,Yuri,[no chapters],Game'.split(',').map((genre, genreid) => ({genre: genre || null, genreid}))
@@ -60,7 +60,7 @@ const chrewrite = ({
 	ctitle: title,
 	groups: doGroups([group_name,group_id],[group_name_2,group_id_2],[group_name_3,group_id_3]),
 	dataurl: chinfo.dataurl,
-	xpages: chinfo.pages.length,
+	npages: chinfo.pages.length,
 	pages: chinfo.pages
 })
 
@@ -89,13 +89,36 @@ async function onMangaResponse(data, res, rej, heads, flags) {
 		throw heads
 	};
 	this.on('end', () => {
-		const j = JSON.parse(d.reduce(jsonred, {d:new util.TextDecoder}).t, jsonrev);
+		const j = JSON.parse(d.reduce(rtx, {d:new util.TextDecoder}).t, jsonrev);
+		d.length = 0
 		res(j)
 	});
 };
-const request = (path) => new Promise(_req.bind(null,'string' === typeof path ? {[HTTP2_HEADER_PATH]:path,endStream:false} : path));
-const getManga = id => request(`/api/3640f3fb/${id}`)
+async function onChapterResponse(data, res, rej, heads, flags) {
+	let d = []
+	this.on('data', d.push.bind(d))
+	this.on('end', ()=>{
+		const {t} = d.reduce(rtx, {})
+		d.length = 0
+		// let [, volume, chapter, title] = t.match(/<title>(?:Vol\. (\S+))?\s*(?:Ch\. (\S+))?\s*\((.+?)\) - MangaDex<\/title>/);
+		// let [, thumb] = t.match(/<meta property="og:image" content="(.+\/\d+\.thumb\.[^"]+))">/);
+		let [, chid] = t.match(/var chapter_id = (\d+);/);
+		// let [, pchid] = t.match(/var prev_chapter_id = (\d+);/);
+		// let [, nchid] = t.match(/var next_chapter_id = (\d+);/);
+		let [, manga] = t.match(/var manga_id = (\d+);/);
+		let [, hash] = t.match(/var dataurl = '([0-9a-z]{32})';/);
+		let [, parr] = t.match(/var page_array = (\[[^\]]+\]);?/);
+		let [, srv] = t.match(/var server = '([^']+)';/);
+		const dataurl = srv+hash+'/'
+		const pages = JSON.parse(parr.replace(/'/g,'"').replace(/,\];?$/,']'))
+		durl.set(Number.parseInt(chid), {dataurl, pages, mid: Number.parseInt(manga)})
+		res({cid: Number.parseInt(chid), mid: Number.parseInt(manga), dataurl, pages})
+	})
+};
+const request = (path, onr) => new Promise(_req.bind(null,'string' === typeof path ? {[HTTP2_HEADER_PATH]:path,endStream:false} : path, onr));
+const getManga = id => request(`/api/3640f3fb/${id}`, onMangaResponse)
+const getChapter = id => request(`/chapter/${id}`, onChapterResponse)
 
-module.exports = {manga, request, getManga}
+module.exports = {manga, request, getManga, getChapter}
 
 
