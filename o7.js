@@ -34,6 +34,36 @@ const sort = (a, b) => (
   ) ? Number.parseFloat(a.chapter) - Number.parseFloat(b.chapter)
     : a.timestamp.valueOf() - b.timestamp.valueOf()
 
+const doGroups = ([name,id],[name2,id2],[name3,id3]) => {
+	if (!id) return [];
+	if (id) return [{gname:name,gid:id}];
+	if (id2) return [{gname:name,gid:id},{gname:name2,gid:id2}]
+	return [{gname:name,gid:id},{gname:name2,gid:id2},{gname:name3,gid:id3}]
+};
+
+const durl = new Map
+const nchinfo = {pages:[],dataurl:null}
+const chrewrite = ({
+	cid, timestamp,
+	chapter, volume,
+	lang_code, title,
+	group_name, group_id,
+	group_name_2, group_id_2,
+	group_name_3, group_id_3,
+	chinfo = timestamp.valueOf() > Date.now() ? nchinfo : durl.get(cid) || nchinfo
+}) => ({
+	cid,
+	timestamp,
+	chapter, ch: Number(chapter),
+	volume, vol: Number(volume),
+	lang: lang_code,
+	ctitle: title,
+	groups: doGroups([group_name,group_id],[group_name_2,group_id_2],[group_name_3,group_id_3]),
+	dataurl: chinfo.dataurl,
+	xpages: chinfo.pages.length,
+	pages: chinfo.pages
+})
+
 const jsonrev = (k,v) => {
 	switch (k) {
 		case 'timestamp': return new Date(v*ms);
@@ -46,7 +76,7 @@ const jsonrev = (k,v) => {
 			if ('string' === typeof v) return v
 			console.log(v)
 			let keys = Object.keys(v);
-			let a = keys.reduce((A,key)=>[...A,{cid:Number.parseInt(key,10),...v[key]}],[]).sort(sort);
+			let a = keys.reduce((A,key)=>[...A,{cid:Number.parseInt(key,10),...v[key]}],[]).sort(sort).map(chrewrite);
 			return a;
 		default: return v;
 	};
