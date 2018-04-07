@@ -8,9 +8,31 @@ const {
 	HTTP2_HEADER_CONTENT_TYPE,
 	HTTP2_HEADER_USER_AGENT
 } = http2.constants;
-const base = new URL('https://mangadex.org')
-const manga = http2.connect(base);
-manga.pinging = setInterval(manga.ping.bind(manga, d=>console.log('ping',d)), 3e4)
+const connections = new Map
+const pinger = (host, err, dur, pl) => {
+	if (err) {
+		console.log('err on %s', host)
+		console.error(err)
+		connections.delete(host)
+		return;
+	}
+	console.log('ping to %s ack in %f with pl %s', host, dur, pl.toString('hex'))
+};
+const getConnection = url => {
+	const h = new URL(url)
+	let c = connections.get(h.hostname)
+	if (c) return c
+
+	let connection = http2.connect(h.origin);
+	connection.pinging = setInterval(connection.ping.bind(connection, pinger.bind(null, h.hostname)), 2e4);
+	connections.set(h.hostname, connection);
+	return connection;
+}
+
+const base = new URL('https://mangadex.org');
+const manga = getConnection(base);
+
+
 const ua = 'Mozilla/5.0 (Windows NT 6.3; WOW64)'
 
 const _req = (data, onr, res, rej) => {
@@ -122,6 +144,7 @@ const getManga = mid => request(`/api/3640f3fb/${mid}`, onMangaResponse)
 const getChapter = cid => request(`/chapter/${cid}`, onChapterResponse)
 const getFullURLs = async cid => {
 	const {dataurl, pages} = durl.get(cid) || await getChapter(cid);
+	let pipe = getConnection(dataurl);
 	return pages.map(x => new URL(x, dataurl));
 }
 
