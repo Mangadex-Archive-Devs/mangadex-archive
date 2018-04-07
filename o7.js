@@ -6,7 +6,7 @@ const {
 	HTTP2_HEADER_CONTENT_TYPE
 } = http2.constants;
 const manga = http2.connect('https://mangadex.org');
-manga.pinging = setInterval(()=>manga.ping(), 3e4)
+manga.pinging = setInterval(manga.ping.bind(manga), 3e4)
 
 const onData = (data, res, rej, chunk) => {}
 const _req = (data, res, rej) => {
