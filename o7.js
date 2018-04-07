@@ -8,14 +8,12 @@ const {
 	HTTP2_HEADER_USER_AGENT
 } = http2.constants;
 const manga = http2.connect('https://mangadex.org');
-manga.pinging = setInterval(manga.ping.bind(manga), 3e4)
+manga.pinging = setInterval(manga.ping.bind(manga, d=>console.log('ping',d)), 3e4)
 const ua = 'Mozilla/5.0 (Windows NT 6.3; WOW64)'
 
-const onData = (data, res, rej, chunk) => {
-	data._data.push(chunk)
-};
 const _req = (data, res, rej) => {
 	data[HTTP2_HEADER_USER_AGENT] = ua;
+	console.log(data)
 	const _ = manga.request(data)
 	_.on('response', onResponse.bind(_, data, res, rej));
 };
@@ -36,14 +34,14 @@ const jsonrev = (k,v) => {
 	};
 };
 
-async function onResponse(data, res, rej, heads, flags) => {
+async function onResponse(data, res, rej, heads, flags) {
 	let d = []
 	this.on('data', d.push.bind(d));
 	if (heads[HTTP2_HEADER_STATUS] !== 200) {
 		
 	};
 	this.on('end', () => {
-		const j = JSON.parse(d.reduce(jsonred, {d:new util.TextDecoder}), jsonrev);
+		const j = JSON.parse(d.reduce(jsonred, {d:new util.TextDecoder}).t, jsonrev);
 		res(j)
 	});
 };
