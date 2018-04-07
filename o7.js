@@ -1,4 +1,5 @@
 const util = require('util');
+const {URL} = require('url');
 const http2 = require('http2');
 const {
 	HTTP2_HEADER_PATH,
@@ -7,7 +8,8 @@ const {
 	HTTP2_HEADER_CONTENT_TYPE,
 	HTTP2_HEADER_USER_AGENT
 } = http2.constants;
-const manga = http2.connect('https://mangadex.org');
+const base = new URL('https://mangadex.org')
+const manga = http2.connect(base);
 manga.pinging = setInterval(manga.ping.bind(manga, d=>console.log('ping',d)), 3e4)
 const ua = 'Mozilla/5.0 (Windows NT 6.3; WOW64)'
 
@@ -89,7 +91,7 @@ async function onMangaResponse(data, res, rej, heads, flags) {
 		throw heads
 	};
 	this.on('end', () => {
-		const j = JSON.parse(d.reduce(rtx, {d:new util.TextDecoder}).t, jsonrev);
+		const j = JSON.parse(d.reduce(rtx, {}).t, jsonrev);
 		d.length = 0
 		res(j)
 	});
@@ -109,7 +111,7 @@ async function onChapterResponse(data, res, rej, heads, flags) {
 		let [, hash] = t.match(/var dataurl = '([0-9a-z]{32})';/);
 		let [, parr] = t.match(/var page_array = (\[[^\]]+\]);?/);
 		let [, srv] = t.match(/var server = '([^']+)';/);
-		const dataurl = srv+hash+'/'
+		const dataurl = new URL(srv+hash+'/', base);
 		const pages = JSON.parse(parr.replace(/'/g,'"').replace(/,\];?$/,']'))
 		durl.set(Number.parseInt(chid), {dataurl, pages, mid: Number.parseInt(manga)})
 		res({cid: Number.parseInt(chid), mid: Number.parseInt(manga), dataurl, pages})
@@ -118,6 +120,10 @@ async function onChapterResponse(data, res, rej, heads, flags) {
 const request = (path, onr) => new Promise(_req.bind(null,'string' === typeof path ? {[HTTP2_HEADER_PATH]:path,endStream:false} : path, onr));
 const getManga = mid => request(`/api/3640f3fb/${mid}`, onMangaResponse)
 const getChapter = cid => request(`/chapter/${cid}`, onChapterResponse)
+const getFullURLs = async cid => {
+	const {dataurl, pages} = durl.get(cid) || await getChapter(cid);
+	return pages.map(x => new URL(x, dataurl));
+}
 
 module.exports = {manga, request, getManga, getChapter}
 
