@@ -6,6 +6,7 @@ const events = require('events');
 const limiter = new RateLimiter(1, 'second');
 const request = require('request');
 const dom = require('cheerio');
+const {getManga, getChapter} = require('./o7');
 
 const DbWrapper = require('./db');
 const db = new DbWrapper();
@@ -55,7 +56,8 @@ async function scrapeMangaList(page = 1)
                 });
                 //console.log(manga);
 
-                manga.forEach((element) => {
+                //manga.forEach((element) => {
+                let element = manga[2];
 
                     if (db.isArchived(element.id)) {
                         console.log("manga #"+element.id+" ("+element.title+") is already archived.");
@@ -64,21 +66,91 @@ async function scrapeMangaList(page = 1)
                     checkManga(element, () => {
                         // Manga is not archived and meets the condition for archival
                         archiveManga(element, () => {
-                            
+
                         });
                     });
 
-                });
+                //});
             });
     });
 
 }
 
-/** Checks if a manga meets the criteria to be archived **/
+/**
+ * Checks if a manga meets the criteria to be archived
+ *
+ */
 function checkManga(manga, cb)
 {
-    console.log("checking...");
-    cb();
+    getManga(manga.id).then((mangaInfo) => {
+        //console.log(mangaInfo, mangaInfo.manga.status, mangaInfo.chapter);
+
+        if (mangaInfo.chapter == null || mangaInfo.chapter.length < 1)
+            return;
+
+        let statusCompleted = mangaInfo.manga.status.status === "completed";
+        let lastUpload = -1;
+        let hasEndTag = false;
+        let volumeLow = Infinity;
+        let volumeHigh = 0;
+        let chapterLow = Infinity;
+        let chapterHigh = 0;
+
+        //console.log(mangaInfo.chapter, mangaInfo.chapter.length);
+        let chapters = [];
+
+        for (let i = 0; i < mangaInfo.chapter.length; i++) {
+            let ch = mangaInfo.chapter[i];
+
+            // Only include english chapters
+            if (ch.lang !== 'gb') continue;
+
+            //console.log(chap);
+            let rx = new RegExp('[end]$', 'i');
+            hasEndTag = rx.test(ch.ctitle);
+            if (ch.timestamp > lastUpload)
+                lastUpload = ch.timestamp;
+            // Update ch/vol numbers
+            volumeLow = Math.min(volumeLow, ch.vol);
+            chapterLow = Math.min(chapterLow, ch.ch);
+            volumeHigh = Math.max(volumeHigh, ch.vol);
+            chapterHigh = Math.max(chapterHigh, ch.ch);
+
+            let groups = [];
+            for (let j = 0; j < ch.groups.length; j++) {
+                groups.push(ch.groups[j].gname);
+            }
+
+            let chapterInfo = {
+                id: ch.cid,
+                title: ch.ctitle,
+                vol: ch.vol,
+                ch: ch.ch,
+                groups: groups.join(' '),
+                path: ""
+            };
+            chapterInfo.path = buildChapterDirname(manga, chapterInfo);
+            chapters.push(chapterInfo);
+        }
+        //let title = buildDirname(manga, mangaInfo, [chapterLow, chapterHigh, volumeLow, volumeHigh]);
+
+        console.log("StatusCompleted = "+statusCompleted+", lastUpload = "+lastUpload+", hasEndTag = "+hasEndTag, chapters);
+
+        cb();
+    });
+}
+
+/**
+ * Takes in a struct as returned from getManga() and returns a directoryname with all relevant info
+ */
+function buildMangaDirname(manga, mangaInfo, numbers)
+{
+    return manga.title + '/';
+}
+
+function buildChapterDirname(manga, mangaInfo, numbers)
+{
+
 }
 
 function archiveManga(manga, cb)

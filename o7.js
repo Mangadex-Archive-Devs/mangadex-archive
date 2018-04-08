@@ -24,7 +24,7 @@ const getConnection = url => {
 	if (c) return c;
 
 	let connection = http2.connect(h.origin);
-	connection.pinging = setInterval(connection.ping.bind(connection, pinger.bind(null, h.hostname)), 2e4);
+	//connection.pinging = setInterval(connection.ping.bind(connection, pinger.bind(null, h.hostname)), 2e4);
 	connections.set(h.hostname, connection);
 	return connection;
 };
@@ -37,7 +37,7 @@ const ua = 'Mozilla/5.0 (Windows NT 6.3; WOW64)';
 
 const _req = (data, onr, res, rej) => {
 	data[HTTP2_HEADER_USER_AGENT] = ua;
-	console.log(data);
+	//console.log(data);
 	const _ = manga.request(data);
 	_.on('response', onr.bind(_, data, res, rej));
 };
@@ -96,7 +96,7 @@ const jsonrev = (k,v) => {
 			return a;
 		},[]);
 		case 'status': return stati[v] || {'status':'unknown',statusid:v};
-		case 'chapter': console.log(v);
+		case 'chapter': //console.log(v);
 			if ('string' === typeof v) return v;
 			let keys = Object.keys(v);
 			let a = keys.reduce((A,key)=>[...A,{cid:Number.parseInt(key,10),...v[key]}],[]).sort(sort).map(chrewrite);
