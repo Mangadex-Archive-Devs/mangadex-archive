@@ -57,7 +57,7 @@ async function scrapeMangaList(page = 1)
                 //console.log(manga);
 
                 //manga.forEach((element) => {
-                let element = manga[2];
+                let element = manga[14];
 
                     if (db.isArchived(element.id)) {
                         console.log("manga #"+element.id+" ("+element.title+") is already archived.");
@@ -106,8 +106,8 @@ function checkManga(manga, cb)
             if (ch.lang !== 'gb') continue;
 
             //console.log(chap);
-            let rx = new RegExp('[end]$', 'i');
-            hasEndTag = rx.test(ch.ctitle);
+            let rx = new RegExp('\[end\]$', 'i');
+            hasEndTag = hasEndTag | rx.test(ch.ctitle);
             if (ch.timestamp > lastUpload)
                 lastUpload = ch.timestamp;
             // Update ch/vol numbers
