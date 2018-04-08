@@ -1,3 +1,3 @@
 
-const http2 = require('http2')
+const http2 = require('http2');
 
