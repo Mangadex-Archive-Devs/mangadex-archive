@@ -29,7 +29,7 @@ const getConnection = url => {
 	return connection;
 };
 
-const base = new URL('https://mangadex.org');
+const base = new URL(process.env.BASE_URL || 'https://mangadex.org');
 const manga = getConnection(base);
 
 

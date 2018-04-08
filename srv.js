@@ -1,3 +1,7 @@
 
-const http2 = require('http2');
 
+const run = function(cmd) {
+    console.log(cmd);
+};
+
+module.exports = { run };
