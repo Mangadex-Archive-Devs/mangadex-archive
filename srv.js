@@ -1,9 +1,6 @@
 const util = require('util');
 const fs = require('fs');
-const sanitize = require("sanitize-filename");
 const RateLimiter = require('limiter').RateLimiter;
-const TokenBucket = require('limiter').TokenBucket;
-const events = require('events');
 const limiter = new RateLimiter(1, 'second');
 const request = require('request');
 const moment = require('moment');
@@ -67,11 +64,9 @@ async function scrapeMangaList(page = 1)
                         console.log("manga #"+element.id+" ("+element.title+") is already archived.");
                     }
 
-                    checkManga(element, () => {
-                        // Manga is not archived and meets the condition for archival
-                        archiveManga(element, () => {
-                            console.log("Archiving...");
-                        });
+                    checkManga(element, (archiveWorker) => {
+                        // Manga is now downloaded, archiveWorker holds all the necessary data
+
                     });
 
                 //});
@@ -159,15 +154,14 @@ function checkManga(manga, cb)
                 artist: mangaInfo.manga.artist,
                 author: mangaInfo.manga.author,
                 genres: genres,
-            }, limiter);
+            }, limiter, cb);
 
             // Foreach chapter we want to archive, fetch the detailed chapter data, which contains pages and more info
             chapters.forEach((chapter) => {
 
                 limiter.removeTokens(1, () => {
-                    console.log(chapter.id);
                     getChapter(chapter.id).then((chapterInfo) => {
-                        console.dir(chapterInfo, {depth:Infinity,color:true});
+                        //console.dir(chapterInfo, {depth:Infinity,color:true});
                         worker.addChapter({
                             id: chapter.id,
                             title: chapter.title,
@@ -181,23 +175,8 @@ function checkManga(manga, cb)
                 });
 
             });
-
-            //cb();
         }
     });
-}
-
-/**
- * Takes in a struct as returned from getManga() and returns a directoryname with all relevant info
- */
-function buildMangaDirname(manga, mangaInfo, numbers)
-{
-    return process.env.BASE_DIR + '/' + sanitize(manga.title) + '/';
-}
-
-function buildChapterDirname(manga, mangaInfo, numbers)
-{
-
 }
 
 function archiveManga(manga, cb)
