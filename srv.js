@@ -1,10 +1,12 @@
 const util = require('util');
 const fs = require('fs');
+const sanitize = require("sanitize-filename");
 const RateLimiter = require('limiter').RateLimiter;
 const TokenBucket = require('limiter').TokenBucket;
 const events = require('events');
 const limiter = new RateLimiter(1, 'second');
 const request = require('request');
+const moment = require('moment');
 const dom = require('cheerio');
 const {getManga, getChapter} = require('./o7');
 
@@ -66,7 +68,7 @@ async function scrapeMangaList(page = 1)
                     checkManga(element, () => {
                         // Manga is not archived and meets the condition for archival
                         archiveManga(element, () => {
-
+                            console.log("Archiving...");
                         });
                     });
 
@@ -95,6 +97,7 @@ function checkManga(manga, cb)
         let volumeHigh = 0;
         let chapterLow = Infinity;
         let chapterHigh = 0;
+        let numGaps = 0;
 
         //console.log(mangaInfo.chapter, mangaInfo.chapter.length);
         let chapters = [];
@@ -120,23 +123,33 @@ function checkManga(manga, cb)
             for (let j = 0; j < ch.groups.length; j++) {
                 groups.push(ch.groups[j].gname);
             }
+            //let groups = ch.groups.map(group => group.gname);
 
             let chapterInfo = {
                 id: ch.cid,
                 title: ch.ctitle,
                 vol: ch.vol,
                 ch: ch.ch,
-                groups: groups.join(' '),
-                path: ""
+                groups: groups.join(' ')
             };
-            chapterInfo.path = buildChapterDirname(manga, chapterInfo);
             chapters.push(chapterInfo);
         }
         //let title = buildDirname(manga, mangaInfo, [chapterLow, chapterHigh, volumeLow, volumeHigh]);
 
-        console.log("StatusCompleted = "+statusCompleted+", lastUpload = "+lastUpload+", hasEndTag = "+hasEndTag, chapters);
+        console.log("StatusCompleted = "+statusCompleted+", lastUpload = "+lastUpload+" ("+Math.abs(moment(lastUpload).diff(Date.now(), 'days'))+" days), hasEndTag = "+hasEndTag);
+        console.dir(mangaInfo, {depth:Infinity,color:true});
+        if (hasEndTag && Math.abs(moment(lastUpload).diff(Date.now(), 'days')) > 7 && statusCompleted && numGaps < 1) {
 
-        cb();
+            for (let chapterInfo in chapters) {
+                limiter.removeTokens(1, () => {
+                    getChapter(chapterInfo.id).then((chapterData) => {
+                        console.dir(chapterData, {depth:Infinity,color:true});
+                    });
+                });
+            }
+
+            cb();
+        }
     });
 }
 
@@ -145,7 +158,7 @@ function checkManga(manga, cb)
  */
 function buildMangaDirname(manga, mangaInfo, numbers)
 {
-    return manga.title + '/';
+    return process.env.BASE_DIR + '/' + sanitize(manga.title) + '/';
 }
 
 function buildChapterDirname(manga, mangaInfo, numbers)
