@@ -16,16 +16,9 @@ function ArchiveWorker(mangaInfo, limiter, callback) {
     this._callback = callback;
     this._chapters = [];
     this._promiseWorkers = [];
+    this._dirname = null;
     self = this;
 
-}
-
-function startPackingTorrent()
-{
-
-
-    // Eventually
-    self._callback();
 }
 
 function getMangaDirname()
@@ -54,6 +47,18 @@ function getChapterDirname(chapter)
     return sanitize(util.format("%s - c%s (v%s) %s", self._manga.title, chapterString, volumeString, groupString));
 }
 
+function createTorrent(directory, cb)
+{
+    console.log("Creating torrent of "+directory+" ...");
+    // TODO
+}
+
+function uploadTorrent(torrentFilename, cb)
+{
+    console.log("Uploading torrent "+torrentFilename+" ...");
+    // TODO
+}
+
 method.addChapter = function (chapter)
 {
     //console.log(chapter);
@@ -62,10 +67,11 @@ method.addChapter = function (chapter)
     let promiseWorker = new Promise((resolve, reject) => {
 
         // Create path & dirs
-        let dirname = path.join(process.env.BASE_DIR, getMangaDirname());
-        if (!fs.existsSync(dirname))
-            fs.mkdirSync(dirname);
-        dirname = path.join(dirname, getChapterDirname(chapter));
+        self._dirname = path.join(process.env.BASE_DIR, getMangaDirname());
+
+        if (!fs.existsSync(self._dirname))
+            fs.mkdirSync(self._dirname);
+        let dirname = path.join(self._dirname, getChapterDirname(chapter));
         if (!fs.existsSync(dirname))
             fs.mkdirSync(dirname);
 
