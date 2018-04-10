@@ -10,6 +10,8 @@ const moment = require('moment');
 const dom = require('cheerio');
 const {getManga, getChapter} = require('./o7');
 
+const ArchiveWorker = require('./archiveWorker');
+
 const DbWrapper = require('./db');
 const db = new DbWrapper();
 
@@ -119,36 +121,68 @@ function checkManga(manga, cb)
             volumeHigh = Math.max(volumeHigh, ch.vol);
             chapterHigh = Math.max(chapterHigh, ch.ch);
 
+            /*
             let groups = [];
             for (let j = 0; j < ch.groups.length; j++) {
                 groups.push(ch.groups[j].gname);
             }
-            //let groups = ch.groups.map(group => group.gname);
+            */
+            let groups = ch.groups.map(group => group.gname);
 
             let chapterInfo = {
                 id: ch.cid,
                 title: ch.ctitle,
                 vol: ch.vol,
                 ch: ch.ch,
-                groups: groups.join(' ')
+                groups: groups
             };
             chapters.push(chapterInfo);
         }
-        //let title = buildDirname(manga, mangaInfo, [chapterLow, chapterHigh, volumeLow, volumeHigh]);
 
         console.log("StatusCompleted = "+statusCompleted+", lastUpload = "+lastUpload+" ("+Math.abs(moment(lastUpload).diff(Date.now(), 'days'))+" days), hasEndTag = "+hasEndTag);
-        console.dir(mangaInfo, {depth:Infinity,color:true});
+        //console.dir(mangaInfo, {depth:Infinity,color:true});
         if (hasEndTag && Math.abs(moment(lastUpload).diff(Date.now(), 'days')) > 7 && statusCompleted && numGaps < 1) {
 
-            for (let chapterInfo in chapters) {
+            let genres = mangaInfo.manga.genres.map(gen => gen.genre);
+
+            // Spawn a new worker
+            let worker = new ArchiveWorker({
+                id: manga.id,
+                title: manga.title,
+                url: manga.url,
+                volStart: volumeLow,
+                volEnd: volumeHigh,
+                chStart: chapterLow,
+                chEnd: chapterHigh,
+                numChapters: chapters.length,
+                lastUpload: lastUpload,
+                artist: mangaInfo.manga.artist,
+                author: mangaInfo.manga.author,
+                genres: genres,
+            }, limiter);
+
+            // Foreach chapter we want to archive, fetch the detailed chapter data, which contains pages and more info
+            chapters.forEach((chapter) => {
+
                 limiter.removeTokens(1, () => {
-                    getChapter(chapterInfo.id).then((chapterData) => {
-                        console.dir(chapterData, {depth:Infinity,color:true});
+                    console.log(chapter.id);
+                    getChapter(chapter.id).then((chapterInfo) => {
+                        console.dir(chapterInfo, {depth:Infinity,color:true});
+                        worker.addChapter({
+                            id: chapter.id,
+                            title: chapter.title,
+                            vol: chapter.vol,
+                            ch: chapter.ch,
+                            groups: chapter.groups,
+                            url: chapterInfo.dataurl,
+                            pages: chapterInfo.pages
+                        });
                     });
                 });
-            }
 
-            cb();
+            });
+
+            //cb();
         }
     });
 }
