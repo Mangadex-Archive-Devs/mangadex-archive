@@ -175,7 +175,7 @@ function checkManga(manga, cb)
         let volumeHigh = 0;
         let chapterLow = Infinity;
         let chapterHigh = 0;
-        let numGaps = 0;
+        let chapterGapCount = 0;
 
         //console.log(mangaInfo.chapter, mangaInfo.chapter.length);
         let chapters = [];
@@ -185,6 +185,9 @@ function checkManga(manga, cb)
 
             // Only include english chapters
             if (ch.lang !== 'gb') continue;
+
+            // Exclude broken chapter numbers
+            if (isNaN(ch.ch)) continue;
 
             //console.log(chap);
             let rx = new RegExp('\[end\]$', 'i');
@@ -215,9 +218,28 @@ function checkManga(manga, cb)
             chapters.push(chapterInfo);
         }
 
-        console.log("StatusCompleted = "+statusCompleted+", lastUpload = "+lastUpload+" ("+Math.abs(moment(lastUpload).diff(Date.now(), 'days'))+" days), hasEndTag = "+hasEndTag);
+        // Check chapter gaps
+        //console.log(manga.title, chapterLow, chapterHigh);
+        // Array of bool, defaults to false
+        // with one entry for each expected chapter, starting at zero
+        let chapterIds = new Array(parseInt(chapterHigh) +1).fill(false);
+        for (let i = 0; i < chapters.length; i++) {
+            // every chapter gets rounded down, ch08 == ch08.5 and its key set to true
+            chapterIds[parseInt( chapters[i].ch )] = true; // This chapter id exists
+        }
+
+        for (let i = 0; i < chapterHigh; i++) {
+            if (!chapterIds[i])
+                chapterGapCount++;
+        }
+        //chapterGapCount = chapterIds.filter((exists) => !exists).length;
+
+        if (!chapterIds[0]) // Ch.00 doesnt count as a gap, because we dont know if the manga is supposed to have one.
+            chapterGapCount = Math.max(0, chapterGapCount - 1);
+
+        console.log("StatusCompleted = "+statusCompleted+", lastUpload = "+lastUpload+" ("+Math.abs(moment(lastUpload).diff(Date.now(), 'days'))+" days), hasEndTag = "+hasEndTag+" gapCount = "+chapterGapCount+", startsAtCh = "+chapterLow);
         //console.dir(mangaInfo, {depth:Infinity,color:true});
-        if (hasEndTag && lastUpload > 0 && Math.abs(moment(lastUpload).diff(Date.now(), 'days')) > 7 && statusCompleted && numGaps < 1) {
+        if (hasEndTag && lastUpload > 0 && Math.abs(moment(lastUpload).diff(Date.now(), 'days')) > 7 && statusCompleted && chapterGapCount < 1 && chapterLow <= 1) {
 
             console.log("Manga "+manga.id+" "+manga.title+" is archiveable!");
 
