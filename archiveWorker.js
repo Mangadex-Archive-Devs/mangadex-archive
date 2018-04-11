@@ -9,7 +9,6 @@ const RateLimiter = require('limiter').RateLimiter;
 const imageLimiter = new RateLimiter(1, 1000); // x requests every y ms
 
 var method = ArchiveWorker.prototype;
-var self;
 
 function ArchiveWorker(mangaInfo, limiter, callback) {
 
@@ -19,18 +18,17 @@ function ArchiveWorker(mangaInfo, limiter, callback) {
     this._chapters = [];
     this._promiseWorkers = [];
     this._dirname = null;
-    self = this;
 
 }
 
-function getMangaDirname()
+method.getMangaDirname = function ()
 {
     //return util.format("%s (%s)", sanitize(this._manga.title), moment(Date.now()).format('dd-mmm-yyyy'));
-    //console.log("getMangaDirname", self._manga);
-    return sanitize(self._manga.title);
-}
+    //console.log("getMangaDirname", this._manga);
+    return sanitize(this._manga.title);
+};
 
-function getChapterDirname(chapter)
+method.getChapterDirname = function (chapter)
 {
     let chapterString = chapter.ch.toString().replace('x', '.').replace('p', '.');
     let [primary, secondary] = chapterString.split(".");
@@ -45,35 +43,36 @@ function getChapterDirname(chapter)
     let volumeString = chapter.vol.toString().padStart(2, '0');
     let groupString = chapter.groups.map(grp => "["+grp+"]").join(' ');
 
-    //console.log("getChapterDirname", self._manga);
-    return sanitize(util.format("%s - c%s (v%s) %s", self._manga.title, chapterString, volumeString, groupString));
-}
+    //console.log("getChapterDirname", this._manga);
+    return sanitize(util.format("%s - c%s (v%s) %s", this._manga.title, chapterString, volumeString, groupString));
+};
 
 method.getAbsolutePath = function () {
     return this._dirname;
 };
 
 method.getDirname = function () {
-    return getMangaDirname();
+    return this.getMangaDirname();
 };
 
 method.getMangaId = function () {
     return this._manga.id;
-}
+};
 
 method.addChapter = function (chapter)
 {
     //console.log(chapter);
+    let self = this;
 
     // Add new chapter downloader
     let promiseWorker = new Promise((resolve, reject) => {
 
         // Create path & dirs
-        self._dirname = path.join(process.env.BASE_DIR, getMangaDirname());
+        self._dirname = path.join(process.env.BASE_DIR, self.getMangaDirname());
 
         if (!fs.existsSync(self._dirname))
             fs.mkdirSync(self._dirname);
-        let dirname = path.join(self._dirname, getChapterDirname(chapter));
+        let dirname = path.join(self._dirname, self.getChapterDirname(chapter));
         if (!fs.existsSync(dirname))
             fs.mkdirSync(dirname);
 

@@ -67,50 +67,58 @@ function scrapeMangaList(page = 1, allDoneCb)
 
                 let mangaChecklist = [];
 
-                // TODO TEST
-                //manga = [manga[14]];
+                // TODO TEST, must be manga that are actually archiveable
+                //manga = [manga[1], manga[2]];
 
-                for (let i = 0; i < manga.length; i++) {
+                if (manga.length < 1) {
+                    console.log("Page "+page+" has no manga that can be archived.");
+                    limiter.removeTokens(1, () => {
+                        scrapeMangaList(page+1, allDoneCb);
+                    });
+                } else {
 
-                    let _manga = manga[i];
+                    for (let i = 0; i < manga.length; i++) {
 
-                    if (db.isArchived(_manga.id)) {
-                        console.log("manga #"+_manga.id+" ("+_manga.title+") is already archived.");
+                        let element = manga[i];
+
+                        if (db.isArchived(element.id)) {
+                            console.log("manga #"+element.id+" ("+element.title+") is already archived.");
+                        }
+
+                        let mangaCheck = new Promise((resolve, reject) => {
+                            try {
+                                checkManga(element, (archiveWorker) => {
+                                    // Manga is now downloaded, archiveWorker holds all the necessary data
+
+                                    createTorrent(archiveWorker, () => {
+
+                                        // Eventually
+                                        db.setArchived(archiveWorker.getMangaId(), true);
+                                        console.log("Manga "+archiveWorker.getMangaId()+" set to archived = true");
+                                        resolve();
+                                    });
+
+                                });
+                            } catch (e) {
+                                reject(e.toString());
+                            }
+                        });
+                        mangaChecklist.push(mangaCheck);
                     }
 
-                    let mangaCheck = new Promise((resolve, reject) => {
-                        let element = _manga;
-                        try {
-                            checkManga(element, (archiveWorker) => {
-                                // Manga is now downloaded, archiveWorker holds all the necessary data
-
-                                createTorrent(archiveWorker, () => {
-
-                                    // Eventually
-                                    db.setArchived(archiveWorker.getMangaId(), true);
-                                    console.log("Manga "+archiveWorker.getMangaId()+" set to archived = true");
-                                    resolve();
-                                });
-
-                            });
-                        } catch (e) {
-                            reject(e.toString());
-                        }
-                    });
-                    mangaChecklist.push(mangaCheck);
+                    Promise.all(mangaChecklist)
+                        .then(() => {
+                            console.log("Scraping of page "+page+" complete.");
+                            limiter.removeTokens(1, () => {
+                                scrapeMangaList(page+1, allDoneCb);
+                            })
+                        })
+                        .catch((err) => {
+                            console.error("Error thrown during scrape of page "+page+": "+err.toString());
+                            allDoneCb();
+                        });
                 }
 
-                Promise.all(mangaChecklist)
-                    .then(() => {
-                        console.log("Scraping of page "+page+" complete.");
-                        limiter.removeTokens(1, () => {
-                            scrapeMangaList(page+1, allDoneCb);
-                        })
-                    })
-                    .catch((err) => {
-                        console.error("Error thrown during scrape of page "+page+": "+err.toString());
-                        allDoneCb();
-                    });
             });
     });
 
@@ -233,7 +241,8 @@ function checkManga(manga, cb)
             //console.log("Created new archiveWorker for title "+manga.title);
 
             // Foreach chapter we want to archive, fetch the detailed chapter data, which contains pages and more info
-            chapters.forEach((chapter) => {
+            for (let i = 0; i < chapters.length; i++) {
+                let chapter = chapters[i];
 
                 limiter.removeTokens(1, () => {
                     getChapter(chapter.id).then((chapterInfo) => {
@@ -250,7 +259,7 @@ function checkManga(manga, cb)
                     });
                 });
 
-            });
+            }
         }
     });
 }
