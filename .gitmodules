@@ -1,0 +1,3 @@
+[submodule "torrent-processor"]
+	path = torrent-processor
+	url = https://github.com/xicelord/mangadex-archive-torrent-processor
