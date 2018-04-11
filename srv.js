@@ -191,7 +191,7 @@ function checkManga(manga, cb)
 
             //console.log(chap);
             let rx = new RegExp('\[end\]$', 'i');
-            hasEndTag = hasEndTag | rx.test(ch.ctitle);
+            hasEndTag = hasEndTag || rx.test(ch.ctitle);
             if (ch.timestamp > lastUpload)
                 lastUpload = ch.timestamp;
             // Update ch/vol numbers
