@@ -5,6 +5,8 @@ const moment = require('moment');
 const sanitize = require("sanitize-filename");
 const events = require('events');
 const request = require('request');
+const RateLimiter = require('limiter').RateLimiter;
+const imageLimiter = new RateLimiter(1, 1000); // x requests every y ms
 
 var method = ArchiveWorker.prototype;
 var self;
@@ -13,7 +15,7 @@ function ArchiveWorker(mangaInfo, limiter, callback) {
 
     this._manga = mangaInfo;
     this._limiter = limiter;
-    this._callback = callback;
+    this._callback = callback; // function (archiveWorker)
     this._chapters = [];
     this._promiseWorkers = [];
     this._dirname = null;
@@ -47,16 +49,16 @@ function getChapterDirname(chapter)
     return sanitize(util.format("%s - c%s (v%s) %s", self._manga.title, chapterString, volumeString, groupString));
 }
 
-function createTorrent(directory, cb)
-{
-    console.log("Creating torrent of "+directory+" ...");
-    // TODO
-}
+method.getAbsolutePath = function () {
+    return this._dirname;
+};
 
-function uploadTorrent(torrentFilename, cb)
-{
-    console.log("Uploading torrent "+torrentFilename+" ...");
-    // TODO
+method.getDirname = function () {
+    return getMangaDirname();
+};
+
+method.getMangaId = function () {
+    return this._manga.id;
 }
 
 method.addChapter = function (chapter)
@@ -92,7 +94,7 @@ method.addChapter = function (chapter)
 
             imageWorkers.push(new Promise((resolve, reject) => {
 
-                self._limiter.removeTokens(1, () => {
+                imageLimiter.removeTokens(1, () => {
 
                     let imgUrl = chapter.url.toString() + page;
 
@@ -118,10 +120,15 @@ method.addChapter = function (chapter)
     if (self._promiseWorkers.length === self._manga.numChapters) {
         // Last chapter worker has been added. Time to start the downloads
         Promise.all(self._promiseWorkers).then(() => {
+
             console.log(util.format("Archive Worker finished downloading %d chapters.", self._manga.numChapters));
-            startPackingTorrent();
+            self._callback(self);
+
         }).catch((reason) => {
-            console.error(util.format("Archive Worker failed while trying to download chapter. Reason: %s", reason.toString()))
+
+            console.error(util.format("Archive Worker failed while trying to download chapter. Reason: %s", reason.toString()));
+            throw new Error();
+
         });
     }
 };

@@ -1,21 +1,26 @@
 const util = require('util');
 const fs = require('fs');
+const path = require('path');
 const RateLimiter = require('limiter').RateLimiter;
-const limiter = new RateLimiter(1, 'second');
+const limiter = new RateLimiter(1, 1500); // 1 request every 1,5 seconds
 const request = require('request');
 const moment = require('moment');
 const dom = require('cheerio');
 const {getManga, getChapter} = require('./o7');
 
 const ArchiveWorker = require('./archiveWorker');
+const TorrentCreate = require('./torrent-processor/index.js');
 
 const DbWrapper = require('./db');
 const db = new DbWrapper();
 
-async function scrapeMangaList(page = 1)
+function scrapeMangaList(page = 1, allDoneCb)
 {
     let url = util.format("%s/titles/2/%d/", (process.env.BASE_URL || 'https://mangadex.org'), page);
+    console.log("scrapeMangaList("+page+") : "+url);
     limiter.removeTokens(1, () => {
+
+        console.log("Firing page request...");
 
         request.get(
             {
@@ -25,21 +30,24 @@ async function scrapeMangaList(page = 1)
                 }
             },
             (err, response, body) => {
+
+                console.log("page request responeded with "+response.statusCode+" and "+body.length+" bytes");
+
                 if (err || response.statusCode !== 200) {
                     console.error("Failed to retrieve manga list!");
+                    allDoneCb();
                     return false;
                 }
 
-                /*
-                fs.writeFileSync("debug-page.html", body.toString());
-                let rx = new RegExp("\\/manga\\/(\\d+)\\/", 'g');
-                let match;
+                // If no manga are found, we are probably at the end of the list
 
-                while (match = rx.exec(body.toString())) {
-                    mangaIds.push(match[1]);
+                let re = /There are no titles found with your search criteria/i;
+                let match = body.toString().match(re);
+                if (match && match.length > 0) {
+                    console.log("End of mangalist reached.");
+                    allDoneCb();
+                    return true;
                 }
-                console.log(url, mangaIds.length, mangaIds);
-                */
 
                 let manga = [];
                 let $ = dom.load(body.toString());
@@ -57,22 +65,87 @@ async function scrapeMangaList(page = 1)
                 });
                 //console.log(manga);
 
-                //manga.forEach((element) => {
-                let element = manga[14];
+                let mangaChecklist = [];
 
-                    if (db.isArchived(element.id)) {
-                        console.log("manga #"+element.id+" ("+element.title+") is already archived.");
+                // TODO TEST
+                //manga = [manga[14]];
+
+                for (let i = 0; i < manga.length; i++) {
+
+                    let _manga = manga[i];
+
+                    if (db.isArchived(_manga.id)) {
+                        console.log("manga #"+_manga.id+" ("+_manga.title+") is already archived.");
                     }
 
-                    checkManga(element, (archiveWorker) => {
-                        // Manga is now downloaded, archiveWorker holds all the necessary data
+                    let mangaCheck = new Promise((resolve, reject) => {
+                        let element = _manga;
+                        try {
+                            checkManga(element, (archiveWorker) => {
+                                // Manga is now downloaded, archiveWorker holds all the necessary data
 
+                                createTorrent(archiveWorker, () => {
+
+                                    // Eventually
+                                    db.setArchived(archiveWorker.getMangaId(), true);
+                                    console.log("Manga "+archiveWorker.getMangaId()+" set to archived = true");
+                                    resolve();
+                                });
+
+                            });
+                        } catch (e) {
+                            reject(e.toString());
+                        }
                     });
+                    mangaChecklist.push(mangaCheck);
+                }
 
-                //});
+                Promise.all(mangaChecklist)
+                    .then(() => {
+                        console.log("Scraping of page "+page+" complete.");
+                        limiter.removeTokens(1, () => {
+                            scrapeMangaList(page+1, allDoneCb);
+                        })
+                    })
+                    .catch((err) => {
+                        console.error("Error thrown during scrape of page "+page+": "+err.toString());
+                        allDoneCb();
+                    });
             });
     });
 
+}
+
+function createTorrent(archiveWorker, cb)
+{
+    console.log("Creating torrent of "+archiveWorker.getAbsolutePath()+" ...");
+
+    let torrentPath = path.join(process.env.BASE_DIR, 'torrents', archiveWorker.getMangaId()+"-"+archiveWorker.getDirname()+".torrent");
+
+    TorrentCreate.generateTorrent(
+        {
+            torrent_name: archiveWorker.getDirname(),
+            source_directory: archiveWorker.getAbsolutePath(),
+            manga_id: archiveWorker.getMangaId(),
+            torrent_file_path: torrentPath,    //Where the .torrent-file should be saved
+        }, (err) => {
+            if (err) {
+                console.error("Failed to create torrent: "+err.message+", "+err.error.toString());
+                throw new Error();
+            } else {
+                console.log("Torrent file created at "+torrentPath);
+                cb();
+            }
+        }
+    );
+}
+
+function uploadTorrent(torrentFilename, cb)
+{
+    console.log("Uploading torrent "+torrentFilename+" ...");
+    // TODO
+
+    cb();
 }
 
 /**
@@ -136,7 +209,9 @@ function checkManga(manga, cb)
 
         console.log("StatusCompleted = "+statusCompleted+", lastUpload = "+lastUpload+" ("+Math.abs(moment(lastUpload).diff(Date.now(), 'days'))+" days), hasEndTag = "+hasEndTag);
         //console.dir(mangaInfo, {depth:Infinity,color:true});
-        if (hasEndTag && Math.abs(moment(lastUpload).diff(Date.now(), 'days')) > 7 && statusCompleted && numGaps < 1) {
+        if (hasEndTag && lastUpload > 0 && Math.abs(moment(lastUpload).diff(Date.now(), 'days')) > 7 && statusCompleted && numGaps < 1) {
+
+            console.log("Manga "+manga.id+" "+manga.title+" is archiveable!");
 
             let genres = mangaInfo.manga.genres.map(gen => gen.genre);
 
@@ -155,6 +230,7 @@ function checkManga(manga, cb)
                 author: mangaInfo.manga.author,
                 genres: genres,
             }, limiter, cb);
+            //console.log("Created new archiveWorker for title "+manga.title);
 
             // Foreach chapter we want to archive, fetch the detailed chapter data, which contains pages and more info
             chapters.forEach((chapter) => {
@@ -192,13 +268,13 @@ const boot = function(cmd)
 
 const run = function() {
 
-    scrapeMangaList()
-        .then(function () {
-            console.log("finished");
-            setTimeout(function () {
-                run();
-            }, (process.env.SCRAPE_INTERVAL_SECONDS || 15 * 60) * 1000);
-        });
+    let delay = (process.env.SCRAPE_INTERVAL_SECONDS || 15 * 60);
+
+    scrapeMangaList(1, () => {
+        console.log("End of run cycle. Sleeping "+delay+" seconds until next cycle.");
+        setTimeout(run, delay * 1000);
+    });
+
 };
 
 module.exports = { boot };
