@@ -6,7 +6,7 @@ const sanitize = require("sanitize-filename");
 const events = require('events');
 const request = require('request');
 const RateLimiter = require('limiter').RateLimiter;
-const imageLimiter = new RateLimiter(1, 1000); // x requests every y ms
+const imageLimiter = new RateLimiter(1, 500); // x requests every y ms
 
 var method = ArchiveWorker.prototype;
 
@@ -20,6 +20,11 @@ function ArchiveWorker(mangaInfo, limiter, callback) {
     this._dirname = null;
 
 }
+
+method.getMangaDescription = function ()
+{
+    return this._manga.description;
+};
 
 method.getMangaDirname = function ()
 {
@@ -51,7 +56,7 @@ method.getAbsolutePath = function () {
     return this._dirname;
 };
 
-method.getDirname = function () {
+method.getMangaName = function () {
     return this.getMangaDirname();
 };
 
@@ -87,7 +92,7 @@ method.addChapter = function (chapter)
             let destinationPath = path.join(dirname, pageNum.toString().padStart(3, '0')+"."+ext);
 
             if (fs.existsSync(destinationPath)) {
-                console.log("File "+destinationPath+" already exists. Skipping...");
+                //console.log("File "+destinationPath+" already exists. Skipping...");
                 continue;
             }
 
@@ -101,7 +106,7 @@ method.addChapter = function (chapter)
                         if (res.statusCode !== 200)
                             reject("Failed to download "+imgUrl+", statusCode: "+res.statusCode);
 
-                        console.log(i, imgUrl, " -> ", destinationPath);
+                        //console.log(i, imgUrl, " -> ", destinationPath);
 
                         res.pipe(fs.createWriteStream(destinationPath));
                         res.on('end', resolve);

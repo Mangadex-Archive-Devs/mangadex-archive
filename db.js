@@ -25,22 +25,34 @@ method.ready = function (cb)
 {
     this._mangaEntries = [];
     this._archivedEntries = [];
-    this._db.each("SELECT * FROM manga", (err, row) => {
-        if (err) {
-            console.error("Failed to read from db");
-            process.exit(1);
-        }
-        this._mangaEntries.push(row);
-    });
-    this._db.each("SELECT * FROM archived", (err, row) => {
-        if (err) {
-            console.error("Failed to read from db");
-            process.exit(1);
-        }
-        this._archivedEntries.push(row);
-    });
 
-    cb();
+    let loadDb = [
+        new Promise((resolve, reject) => {
+            this._db.all("SELECT * FROM manga", (err, rows) => {
+                if (err) {
+                    console.error("Failed to read from db");
+                    process.exit(1);
+                }
+                this._mangaEntries = rows;
+                resolve();
+            });
+        }),
+        new Promise((resolve, reject) => {
+            this._db.all("SELECT * FROM archived", (err, rows) => {
+                if (err) {
+                    console.error("Failed to read from db");
+                    process.exit(1);
+                }
+                this._archivedEntries = rows.map((e => e.mangaId));
+                resolve();
+            });
+        })
+    ];
+
+    Promise.all(loadDb).then(() => {
+        //console.log("DB State:", this);
+        cb();
+    });
 };
 
 method.isArchived = function (mangaId) {
