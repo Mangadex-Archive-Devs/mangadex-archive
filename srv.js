@@ -19,10 +19,11 @@ let torrentUploadQueue = [];
 
 function nextPage(page, allPagesDoneCb)
 {
-    console.log("nextPage("+page+") in 2 seconds...");
+    let delay = 5;
+    console.log("nextPage("+page+") in "+delay+" seconds...");
     setTimeout(() => {
         scrapeMangaList(page, allPagesDoneCb)
-    }, 2000);
+    }, delay * 1000);
 }
 
 function scrapeMangaList(page = 1, allPagesDoneCb)
@@ -119,7 +120,7 @@ function scrapeMangaList(page = 1, allPagesDoneCb)
                             // All manga have been downloaded and the queues have been filled, proceed with torrent creation and uploading
                             console.log("Scraping of page "+page+" complete.");
 
-                            processTorrentCreationQueue(
+                            processTorrentCreationQueue(() => {
                                 // after that...
                                 processTorrentUploadQueue(() => {
                                     // all uploaded...
@@ -129,34 +130,14 @@ function scrapeMangaList(page = 1, allPagesDoneCb)
 
                                     // start on the next page
                                     nextPage(page+1, allPagesDoneCb);
-                            }));
+                                });
+                            });
                         })
                         .catch((err) => {
                             console.error("Error thrown during scrape of page "+page, err);
                             clearQueues();
                             nextPage(page+1, allPagesDoneCb);
                         })
-
-                    /*
-                    Promise.all(mangaChecklist)
-                        .then(() => {
-                            console.log("Scraping of page "+page+" complete.");
-                            limiter.removeTokens(1, () => {
-                                scrapeMangaList(page+1, allPagesDoneCb);
-                            })
-                        })
-                        .catch((err) => {
-                            console.error("Error thrown during scrape of page "+page+": "+err.toString());
-                            nextPage(page+1, allPagesDoneCb);
-                        });
-                    */
-
-                    /*
-                    // Eventually
-                    db.setArchived(archiveWorker.getMangaId(), true);
-                    console.log("Manga "+archiveWorker.getMangaId()+" set to archived = true");
-                    resolve();
-                    */
                 }
 
             });
@@ -166,7 +147,7 @@ function scrapeMangaList(page = 1, allPagesDoneCb)
 
 function enqueueTorrentCreation(archiveWorker)
 {
-    console.log("Creating torrent of "+archiveWorker.getAbsolutePath()+" ...");
+    console.log("Torrent Creation of "+archiveWorker.getAbsolutePath()+" is queued.");
 
     let torrentInfo = {
         mangaId: archiveWorker.getMangaId(),
@@ -174,68 +155,52 @@ function enqueueTorrentCreation(archiveWorker)
         mangaPath: archiveWorker.getAbsolutePath(),
         torrentPath: path.join(process.env.BASE_DIR, 'torrents', archiveWorker.getMangaId()+"-"+archiveWorker.getMangaName()+".torrent"),
     };
-    archiveWorker = null;
-    let creationWorker = new Promise((resolve, reject) => {
-
-        TorrentCreate.generateTorrent(
-            {
-                torrent_name: torrentInfo.mangaTitle,
-                source_directory: torrentInfo.mangaPath,
-                manga_id: torrentInfo.mangaId,
-                torrent_file_path: torrentInfo.torrentPath,    //Where the .torrent-file should be saved
-            }, (err) => {
-                if (err) {
-                    console.error("Failed to create torrent: "+err.message+", "+err.error.toString());
-                    reject();
-                } else {
-                    console.log("Torrent file created at "+torrentInfo.torrentPath);
-                    let uploadInfo = {
-                        mangaId: torrentInfo.mangaId,
-                        title: torrentInfo.mangaTitle,
-                        description: "TODO",
-                        torrent: torrentInfo.torrentPath
-                    };
-                    let uploadWorker = new Promise((resolve, reject) => {
-
-                        TorrentCreate.postTorrent(
-                            {
-                                torrent_file_path: uploadInfo.torrent,
-                                anidex_description: uploadInfo.description,
-                                anidex_hentai: false
-                            }, (err) => {
-                                if (err) {
-                                    console.error("Failed to upload torrent "+uploadInfo.torrent+", uploader returned: "+err.toString());
-                                    reject();
-                                }
-                                console.log("Successfully uploaded torrent for manga "+torrentInfo.mangaTitle);
-                                db.setArchived(uploadInfo.mangaId, true);
-                                console.log("Manga "+uploadInfo.mangaId+" set to archived = true");
-                                resolve();
-                            }
-                        )
-
-                    });
-                    torrentUploadQueue.push(uploadWorker);
-                    resolve();
-                }
-            }
-        );
-    });
-    torrentCreationQueue.push(creationWorker);
+    torrentCreationQueue.push(torrentInfo);
 }
 
 function clearQueues()
 {
-    torrentCreationQueue.clear();
-    torrentUploadQueue.clear();
+    torrentCreationQueue = [];
+    torrentUploadQueue = [];
 }
 
 function processTorrentCreationQueue(finishedCb)
 {
     if (torrentCreationQueue.length > 0) {
         console.log("Processing TorrentCreation of "+torrentCreationQueue.length+" torrents ...");
-        Promise.all(torrentCreationQueue)
-            .then(finishedCb)
+
+        let fn = (torrentInfo, index) => {
+            if (torrentInfo == null)
+                finishedCb();
+            else {
+                TorrentCreate.generateTorrent(
+                    {
+                        torrent_name: torrentInfo.mangaTitle,
+                        source_directory: torrentInfo.mangaPath,
+                        manga_id: torrentInfo.mangaId,
+                        torrent_file_path: torrentInfo.torrentPath,    //Where the .torrent-file should be saved
+
+                    }, (err) => {
+                        if (err) {
+                            console.error("Failed to create torrent: " + err.message + ", " + err.error.toString());
+                        } else {
+                            console.log("Torrent file created at "+torrentInfo.torrentPath);
+                            let uploadInfo = {
+                                mangaId: torrentInfo.mangaId,
+                                mangaTitle: torrentInfo.mangaTitle,
+                                title: torrentInfo.mangaTitle,
+                                description: "TODO",
+                                torrent: torrentInfo.torrentPath
+                            };
+                            torrentUploadQueue.push(uploadInfo);
+                        }
+                        index++;
+                        fn(torrentCreationQueue[index], index); // Next
+                    }
+                )
+            }
+        };
+        fn(torrentCreationQueue[0], 0);
     } else {
         finishedCb();
     }
@@ -245,8 +210,32 @@ function processTorrentUploadQueue(finishedCb)
 {
     if (torrentUploadQueue.length > 0) {
         console.log("Processing TorrentUpload of "+torrentUploadQueue.length+" torrents ...");
-        Promise.all(torrentUploadQueue)
-            .then(finishedCb)
+
+        let fn = (uploadInfo, index) => {
+            if (uploadInfo == null)
+                finishedCb();
+            else {
+                TorrentCreate.postTorrent(
+                    {
+                        torrent_file_path: uploadInfo.torrent,
+                        anidex_description: uploadInfo.description,
+                        anidex_hentai: false
+
+                    }, (err) => {
+                        if (err) {
+                            console.error("Failed to upload torrent "+uploadInfo.torrent+", uploader returned: "+err.toString());
+                        } else {
+                            console.log("Successfully uploaded torrent for manga "+uploadInfo.mangaTitle);
+                            db.setArchived(uploadInfo.mangaId, true);
+                            console.log("Manga "+uploadInfo.mangaId+" set to archived = true");
+                        }
+                        index++;
+                        fn(torrentUploadQueue[index], index); // Next
+                    }
+                )
+            }
+        };
+        fn(torrentUploadQueue[0], 0);
     } else {
         finishedCb();
     }
@@ -335,7 +324,7 @@ function checkManga(manga, archiveWorkerResult)
             if (!chapterIds[0]) // Ch.00 doesnt count as a gap, because we dont know if the manga is supposed to have one.
                 chapterGapCount = Math.max(0, chapterGapCount - 1);
 
-            console.log("StatusCompleted = "+statusCompleted+", lastUpload = "+lastUpload+" ("+Math.abs(moment(lastUpload).diff(Date.now(), 'days'))+" days), hasEndTag = "+hasEndTag+" gapCount = "+chapterGapCount+", startsAtCh = "+chapterLow);
+            //console.log("StatusCompleted = "+statusCompleted+", lastUpload = "+lastUpload+" ("+Math.abs(moment(lastUpload).diff(Date.now(), 'days'))+" days), hasEndTag = "+hasEndTag+" gapCount = "+chapterGapCount+", startsAtCh = "+chapterLow);
             //console.dir(mangaInfo, {depth:Infinity,color:true});
             if (hasEndTag && lastUpload > 0 && Math.abs(moment(lastUpload).diff(Date.now(), 'days')) > 7 && statusCompleted && chapterGapCount < 1 && chapterLow <= 1) {
 
@@ -367,6 +356,9 @@ function checkManga(manga, archiveWorkerResult)
                 // Foreach chapter we want to archive, fetch the detailed chapter data, which contains pages and more info
                 for (let i = 0; i < chapters.length; i++) {
                     let chapter = chapters[i];
+
+                    if (!chapter.id || isNaN(chapter.id) || chapter.id < 1)
+                        continue;
 
                     limiter.removeTokens(1, () => {
                         getChapter(chapter.id).then((chapterInfo) => {

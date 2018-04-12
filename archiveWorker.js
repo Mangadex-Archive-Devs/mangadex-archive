@@ -30,7 +30,7 @@ method.getMangaDirname = function ()
 {
     //return util.format("%s (%s)", sanitize(this._manga.title), moment(Date.now()).format('dd-mmm-yyyy'));
     //console.log("getMangaDirname", this._manga);
-    return sanitize(this._manga.title);
+    return sanitize(this._manga.title).toString().replace(/^\.+/, "");
 };
 
 method.getChapterDirname = function (chapter)
@@ -49,7 +49,7 @@ method.getChapterDirname = function (chapter)
     let groupString = chapter.groups.map(grp => "["+grp+"]").join(' ');
 
     //console.log("getChapterDirname", this._manga);
-    return sanitize(util.format("%s - c%s (v%s) %s", this._manga.title, chapterString, volumeString, groupString));
+    return sanitize(util.format("%s - c%s (v%s) %s", this._manga.title, chapterString, volumeString, groupString)).toString().replace(/^\.+/, "");
 };
 
 method.getAbsolutePath = function () {
