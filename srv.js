@@ -219,15 +219,22 @@ function processTorrentUploadQueue(finishedCb)
                     {
                         torrent_file_path: uploadInfo.torrent,
                         anidex_description: uploadInfo.description,
-                        anidex_hentai: false
+                        anidex_hentai: false,
+                        anidex_subcat_id: process.env.ANIDEX_SUBCAT_ID || 7,
+                        anidex_api_key: process.env.ANIDEX_APIKEY,
+                        anidex_private: process.env.ANIDEX_PRIVATE || 0,
+                        anidex_debug: process.env.ANIDEX_DEBUG || 0
 
-                    }, (err) => {
-                        if (err) {
-                            console.error("Failed to upload torrent "+uploadInfo.torrent+", uploader returned: "+err.toString());
-                        } else {
-                            console.log("Successfully uploaded torrent for manga "+uploadInfo.mangaTitle);
+                    }, (result) => {
+                        if (result == null) {
+                            console.error("Failed to upload torrent "+uploadInfo.torrent+"!");
+                        } else if (result > 0) {
+                            console.log("Successfully uploaded torrent for manga "+uploadInfo.mangaTitle+", torrentId = "+result);
                             db.setArchived(uploadInfo.mangaId, true);
+                            db.setAnidexId(uploadInfo.mangaId, result);
                             console.log("Manga "+uploadInfo.mangaId+" set to archived = true");
+                        } else {
+                            console.log("Successfully uploaded torrent, but torrentId was invalid. This probably means, it was a test upload.");
                         }
                         index++;
                         fn(torrentUploadQueue[index], index); // Next
@@ -390,6 +397,36 @@ function checkManga(manga, archiveWorkerResult)
 const boot = function(cmd)
 {
     db.ready(run);
+
+    /*/ test upload
+    let args = {
+        torrent_name: "test torrent",         //Name of the torrent
+        source_directory: "Q:\\md-archive\\hackXXXX",     //Location of chapters
+        manga_id: 42,              //ID of the manga
+        torrent_file_path: "Q:\\md-archive\\torrents\\test.torrent",    //Where the .torrent-file should be saved
+    };
+    console.log("Creating torrent...", args);
+    TorrentCreate.generateTorrent(args, (err) => {
+
+        if (err) {
+            console.error(err);
+        }
+
+        let args = {
+            torrent_file_path: "Q:\\md-archive\\torrents\\test.torrent",    //Where the .torrent-file is located at
+            anidex_description: "TESTING 123123 \n\n line break",   //Description for anidex
+            anidex_hentai: 0,         //Is the manga considered adult content
+            anidex_subcat_id: process.env.ANIDEX_SUBCAT_ID,
+            anidex_api_key: process.env.ANIDEX_APIKEY,
+            anidex_private: 1,
+            anidex_debug: process.env.ANIDEX_DEBUG
+        };
+        console.log("Uploading torrent...", args);
+        TorrentCreate.postTorrent(args, (uploadId) => {
+            console.log(uploadId);
+        })
+
+    });*/
 };
 
 const run = function() {

@@ -1,0 +1,30 @@
+  __  __                             _                                                _     _
+ |  \/  |                           | |                                /\            | |   (_)
+ | \  / | __ _ _ __   __ _  __ _  __| | _____  __  ___  _ __ __ _     /  \   _ __ ___| |__  ___   _____
+ | |\/| |/ _` | '_ \ / _` |/ _` |/ _` |/ _ \ \/ / / _ \| '__/ _` |   / /\ \ | '__/ __| '_ \| \ \ / / _ \
+ | |  | | (_| | | | | (_| | (_| | (_| |  __/>  < | (_) | | | (_| |  / ____ \| | | (__| | | | |\ V /  __/
+ |_|  |_|\__,_|_| |_|\__, |\__,_|\__,_|\___/_/\_(_)___/|_|  \__, | /_/    \_\_|  \___|_| |_|_| \_/ \___|
+                      __/ |                                  __/ |
+                     |___/                                  |___/
+==== MANGA INFO ====
+
+- Id: ${id}
+- Title: ${title}
+- Url: ${url}
+
+==== MANGA DESCRIPTION ====
+
+${description}
+
+==== ARCHIVE INFO ====
+
+- Date Archived: ${date}
+- Archiver version: ${version}
+- Tracker: https://anidex.info
+- Profile: https://anidex.info/user/12705
+
+THE MANGADEX-ARCHIVER AUTOMATICALLY CREATES TORRENTS OF MANGA THAT ARE FLAGGED AS COMPLETED.
+
+IF THIS TORRENT CONTAINS INCOMPLETE VOLUMES, CHAPTERS OR IMAGE FILES, PLEASE SEND A MESSAGE TO THE USER PROFILE LINKED
+ABOVE OR CONTACT THE MAINTAINER IN THE MANGADEX DISCORD.
+
