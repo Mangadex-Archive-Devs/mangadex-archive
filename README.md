@@ -4,8 +4,8 @@ A nodejs based bot that periodically scans for completed manga on mangadex, whic
 
 **Do not browse Mangadex while this is running**
 
-# Collaborators
-
+### Collaborators
+Thanks to everyone who participated in this project
 * https://github.com/radonthetyrant
 * https://github.com/xicelord
 * https://github.com/ZaneHannanAU
