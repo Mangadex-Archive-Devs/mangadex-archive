@@ -8,18 +8,18 @@
                      |___/                                  |___/
 ==== MANGA INFO ====
 
-- Id: ${id}
-- Title: ${title}
-- Url: ${url}
+- Id: {id}
+- Title: {title}
+- Url: {url}
 
 ==== MANGA DESCRIPTION ====
 
-${description}
+{description}
 
 ==== ARCHIVE INFO ====
 
-- Date Archived: ${date}
-- Archiver version: ${version}
+- Date Archived: {date}
+- Archiver version: {version}
 - Tracker: https://anidex.info
 - Profile: https://anidex.info/user/12705
 

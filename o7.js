@@ -1,6 +1,7 @@
 const util = require('util');
 const {URL} = require('url');
 const http2 = require('http2');
+const notify = require('./notify');
 const {
 	HTTP2_HEADER_PATH,
 	HTTP2_HEADER_STATUS,
@@ -118,25 +119,31 @@ async function onMangaResponse(data, res, rej, heads, flags) {
 	});
 }
 async function onChapterResponse(data, res, rej, heads, flags) {
-	let d = [];
-	this.on('data', d.push.bind(d));
-	this.on('end', ()=>{
-		const {t} = d.reduce(rtx, {});
-		d.length = 0;
-		// let [, volume, chapter, title] = t.match(/<title>(?:Vol\. (\S+))?\s*(?:Ch\. (\S+))?\s*\((.+?)\) - MangaDex<\/title>/);
-		// let [, thumb] = t.match(/<meta property="og:image" content="(.+\/\d+\.thumb\.[^"]+))">/);
-		let [, chid] = t.match(/var chapter_id = (\d+);/);
-		// let [, pchid] = t.match(/var prev_chapter_id = (\d+);/);
-		// let [, nchid] = t.match(/var next_chapter_id = (\d+);/);
-		let [, manga] = t.match(/var manga_id = (\d+);/);
-		let [, hash] = t.match(/var dataurl = '([0-9a-z]{32})';/);
-		let [, parr] = t.match(/var page_array = (\[[^\]]+\]);?/);
-		let [, srv] = t.match(/var server = '([^']+)';/);
-		const dataurl = new URL(srv+hash+'/', base);
-		const pages = JSON.parse(parr.replace(/'/g,'"').replace(/,\];?$/,']'));
-		durl.set(Number.parseInt(chid), {dataurl, pages, mid: Number.parseInt(manga)});
-		res({cid: Number.parseInt(chid), mid: Number.parseInt(manga), dataurl, pages})
-	})
+	try {
+        let d = [];
+        this.on('data', d.push.bind(d));
+        this.on('end', ()=>{
+            const {t} = d.reduce(rtx, {});
+            d.length = 0;
+            // let [, volume, chapter, title] = t.match(/<title>(?:Vol\. (\S+))?\s*(?:Ch\. (\S+))?\s*\((.+?)\) - MangaDex<\/title>/);
+            // let [, thumb] = t.match(/<meta property="og:image" content="(.+\/\d+\.thumb\.[^"]+))">/);
+            let [, chid] = t.match(/var chapter_id = (\d+);/);
+            // let [, pchid] = t.match(/var prev_chapter_id = (\d+);/);
+            // let [, nchid] = t.match(/var next_chapter_id = (\d+);/);
+            let [, manga] = t.match(/var manga_id = (\d+);/);
+            let [, hash] = t.match(/var dataurl = '([0-9a-z]{32})';/);
+            let [, parr] = t.match(/var page_array = (\[[^\]]+\]);?/);
+            let [, srv] = t.match(/var server = '([^']+)';/);
+            const dataurl = new URL(srv+hash+'/', base);
+            const pages = JSON.parse(parr.replace(/'/g,'"').replace(/,\];?$/,']'));
+            durl.set(Number.parseInt(chid), {dataurl, pages, mid: Number.parseInt(manga)});
+            res({cid: Number.parseInt(chid), mid: Number.parseInt(manga), dataurl, pages})
+        })
+	}
+	catch (err) {
+		notify.err("Failed to scrape chapter response page: "+(err ? err.toString() : "no error details"));
+		res(null);
+	}
 }
 const request = (path, onr) => new Promise(_req.bind(null,'string' === typeof path ? {[HTTP2_HEADER_PATH]:path,endStream:false} : path, onr));
 const getManga = mid => request(`/api/3640f3fb/${mid}`, onMangaResponse);

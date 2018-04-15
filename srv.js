@@ -2,7 +2,7 @@ const util = require('util');
 const fs = require('fs');
 const path = require('path');
 const RateLimiter = require('limiter').RateLimiter;
-const limiter = new RateLimiter(1, 2000); // 1 request every 1,5 seconds
+const limiter = new RateLimiter(1, 2000); // x requests every y ms
 const request = require('request');
 const moment = require('moment');
 const dom = require('cheerio');
@@ -14,8 +14,14 @@ const TorrentCreate = require('./torrent-processor/index.js');
 const DbWrapper = require('./db');
 const db = new DbWrapper();
 
+const notify = require('./notify');
+
 let torrentCreationQueue = [];
 let torrentUploadQueue = [];
+
+let missingEndTagWarned = [];
+
+let _isStopRequested = false;
 
 function nextPage(page, allPagesDoneCb)
 {
@@ -47,6 +53,7 @@ function scrapeMangaList(page = 1, allPagesDoneCb)
 
                 if (err || response.statusCode !== 200) {
                     console.error("Failed to retrieve manga list!");
+                    notify.err("Failed to retrieve manga list, response code: "+response.statusCode+", err: "+err.toString());
                     nextPage(page+1, allPagesDoneCb);
                     return false;
                 }
@@ -86,6 +93,7 @@ function scrapeMangaList(page = 1, allPagesDoneCb)
                     console.log("Page "+page+" has no manga that can be archived.");
                     limiter.removeTokens(1, () => {
                         nextPage(page+1, allPagesDoneCb);
+                        return true;
                     });
                 } else {
 
@@ -135,9 +143,11 @@ function scrapeMangaList(page = 1, allPagesDoneCb)
                         })
                         .catch((err) => {
                             console.error("Error thrown during scrape of page "+page, err);
+                            notify.err("Error thrown during scrape of page "+page+": "+err.toString());
                             clearQueues();
                             nextPage(page+1, allPagesDoneCb);
-                        })
+                        });
+                    return true;
                 }
 
             });
@@ -166,7 +176,7 @@ function clearQueues()
 
 function processTorrentCreationQueue(finishedCb)
 {
-    if (torrentCreationQueue.length > 0) {
+    if (process.flags.images && torrentCreationQueue.length > 0) {
         console.log("Processing TorrentCreation of "+torrentCreationQueue.length+" torrents ...");
 
         let fn = (torrentInfo, index) => {
@@ -182,7 +192,8 @@ function processTorrentCreationQueue(finishedCb)
 
                     }, (err) => {
                         if (err) {
-                            console.error("Failed to create torrent: " + err.message + ", " + err.error.toString());
+                            console.error("Failed to create torrent: " + err.message + ", " + (err.error ? err.error.toString() : ""));
+                            notify.err("Failed to create torrent: "+err.message+", "+(err.error ? err.error.toString() : ""));
                         } else {
                             console.log("Torrent file created at "+torrentInfo.torrentPath);
                             let uploadInfo = {
@@ -209,7 +220,7 @@ function processTorrentCreationQueue(finishedCb)
 function processTorrentUploadQueue(finishedCb)
 {
     if (torrentUploadQueue.length > 0) {
-        console.log("Processing TorrentUpload of "+torrentUploadQueue.length+" torrents ...");
+        console.log("Processing TorrentUpload of " + torrentUploadQueue.length + " torrents ...");
 
         let fn = (uploadInfo, index) => {
             if (uploadInfo == null)
@@ -223,18 +234,20 @@ function processTorrentUploadQueue(finishedCb)
                         anidex_subcat_id: process.env.ANIDEX_SUBCAT_ID || 7,
                         anidex_api_key: process.env.ANIDEX_APIKEY,
                         anidex_private: process.env.ANIDEX_PRIVATE || 0,
-                        anidex_debug: process.env.ANIDEX_DEBUG || 0
+                        anidex_debug: process.env.ANIDEX_DEBUG || (process.flags.upload ? 0 : 1)
 
                     }, (result) => {
                         if (result == null) {
-                            console.error("Failed to upload torrent "+uploadInfo.torrent+"!");
+                            console.error("Failed to upload torrent " + uploadInfo.torrent + "!");
+                            notify.err("Failed to upload torrent " + uploadInfo.torrent);
                         } else if (result > 0) {
-                            console.log("Successfully uploaded torrent for manga "+uploadInfo.mangaTitle+", torrentId = "+result);
-                            db.setArchived(uploadInfo.mangaId, true);
-                            db.setAnidexId(uploadInfo.mangaId, result);
-                            console.log("Manga "+uploadInfo.mangaId+" set to archived = true");
+                            console.log("Successfully uploaded torrent for manga " + uploadInfo.mangaTitle + ", torrentId = " + result);
+                            db.setArchived(uploadInfo.mangaId, result, true);
+                            console.log("Manga " + uploadInfo.mangaId + " set to archived = true");
+                            notify.warn("New Manga archived: " + uploadInfo.mangaTitle + " at https://mangadex.org/manga/" + uploadInfo.mangaId + " on anidex: https://anidex.info/torrent/" + result);
                         } else {
                             console.log("Successfully uploaded torrent, but torrentId was invalid. This probably means, it was a test upload.");
+                            notify.warn("New Manga (TEST) archived: " + uploadInfo.mangaTitle + " at https://mangadex.org/manga/" + uploadInfo.mangaId + " on anidex: https://anidex.info/torrent/" + result);
                         }
                         index++;
                         fn(torrentUploadQueue[index], index); // Next
@@ -259,8 +272,10 @@ function checkManga(manga, archiveWorkerResult)
 
             //console.log(mangaInfo, mangaInfo.manga.status, mangaInfo.chapter);
 
-            if (mangaInfo.chapter == null || mangaInfo.chapter.length < 1)
-                throw new Error("No chapters"); // Drop out of this try block
+            if (mangaInfo.chapter == null || mangaInfo.chapter.length < 1) {
+                archiveWorkerResult(null);
+                return;
+            }
 
             let statusCompleted = mangaInfo.manga.status.status === "completed";
             let lastUpload = -1;
@@ -284,8 +299,8 @@ function checkManga(manga, archiveWorkerResult)
                 if (isNaN(ch.ch)) continue;
 
                 //console.log(chap);
-                let rx = new RegExp('\[end\]$', 'i');
-                hasEndTag = hasEndTag | rx.test(ch.ctitle);
+                let rx = /\[end\]/i;
+                hasEndTag = hasEndTag || rx.test(ch.ctitle);
                 if (ch.timestamp > lastUpload)
                     lastUpload = ch.timestamp;
                 // Update ch/vol numbers
@@ -333,9 +348,28 @@ function checkManga(manga, archiveWorkerResult)
 
             //console.log("StatusCompleted = "+statusCompleted+", lastUpload = "+lastUpload+" ("+Math.abs(moment(lastUpload).diff(Date.now(), 'days'))+" days), hasEndTag = "+hasEndTag+" gapCount = "+chapterGapCount+", startsAtCh = "+chapterLow);
             //console.dir(mangaInfo, {depth:Infinity,color:true});
-            if (hasEndTag && lastUpload > 0 && Math.abs(moment(lastUpload).diff(Date.now(), 'days')) > 7 && statusCompleted && chapterGapCount < 1 && chapterLow <= 1) {
+            let condition =
+                hasEndTag
+                && lastUpload > 0
+                && Math.abs(moment(lastUpload).diff(Date.now(), 'days')) > 7
+                && statusCompleted
+                && chapterGapCount < 1
+                && chapterLow <= 1;
+
+            if (hasEndTag && !statusCompleted) {
+                // Notify
+                console.warn("Manga #"+manga.id+" "+manga.title+" has an [END] Tag, but is not set as completed.");
+                notify.warn("Manga #"+manga.id+" "+manga.title+" has an [END] Tag, but is not set as completed. https://mangadex.org/manga/"+manga.id);
+            }
+
+            if (process.flags.stats) {
+                db.addStats(manga.id, manga.title, volumeLow, volumeHigh-volumeLow+1, chapterLow, chapters.length, chapterGapCount, lastUpload, hasEndTag, statusCompleted ? "Completed" : "Ongoing", condition);
+            }
+
+            if (condition) {
 
                 console.log("Manga "+manga.id+" "+manga.title+" is archiveable!");
+                notify.info("Manga "+manga.id+" "+manga.title+" is archiveable! https://mangadex.org/manga/"+manga.id);
 
                 let genres = mangaInfo.manga.genres.map(gen => gen.genre);
 
@@ -358,6 +392,7 @@ function checkManga(manga, archiveWorkerResult)
                     // Archive worker created
                     archiveWorkerResult(worker);
                 });
+                worker.addInfoFile();
                 //console.log("Created new archiveWorker for title "+manga.title);
 
                 // Foreach chapter we want to archive, fetch the detailed chapter data, which contains pages and more info
@@ -369,16 +404,19 @@ function checkManga(manga, archiveWorkerResult)
 
                     limiter.removeTokens(1, () => {
                         getChapter(chapter.id).then((chapterInfo) => {
-                            //console.dir(chapterInfo, {depth:Infinity,color:true});
-                            worker.addChapter({
-                                id: chapter.id,
-                                title: chapter.title,
-                                vol: chapter.vol,
-                                ch: chapter.ch,
-                                groups: chapter.groups,
-                                url: chapterInfo.dataurl,
-                                pages: chapterInfo.pages
-                            });
+
+                            if (chapterInfo) { // chapterInfo is null when the parser failed
+                                worker.addChapter({
+                                    id: chapter.id,
+                                    title: chapter.title,
+                                    vol: chapter.vol,
+                                    ch: chapter.ch,
+                                    groups: chapter.groups,
+                                    url: chapterInfo.dataurl,
+                                    pages: chapterInfo.pages
+                                });
+                            }
+
                         });
                     });
                 }
@@ -389,44 +427,38 @@ function checkManga(manga, archiveWorkerResult)
 
         } catch (err) {
             // Any reson for not archieving this was given. // FIXME
+            console.error("Error while checking manga "+manga.id+": "+err.toString());
+            notify.err("Error while checking manga "+manga.id+": "+err.toString());
             archiveWorkerResult(null);
         }
     });
 }
 
+function isStopRequested()
+{
+    if (fs.existsSync('./stop')) {
+        fs.unlinkSync('./stop');
+        return true;
+    }
+    return _isStopRequested;
+}
+
+function requestStop()
+{
+    _isStopRequested = true;
+}
+
 const boot = function(cmd)
 {
+    process.flags = {
+        db: cmd.db,
+        upload: cmd.upload,
+        images: cmd.images,
+        stats: cmd.stats || false
+    };
+
     db.ready(run);
 
-    /*/ test upload
-    let args = {
-        torrent_name: "test torrent",         //Name of the torrent
-        source_directory: "Q:\\md-archive\\hackXXXX",     //Location of chapters
-        manga_id: 42,              //ID of the manga
-        torrent_file_path: "Q:\\md-archive\\torrents\\test.torrent",    //Where the .torrent-file should be saved
-    };
-    console.log("Creating torrent...", args);
-    TorrentCreate.generateTorrent(args, (err) => {
-
-        if (err) {
-            console.error(err);
-        }
-
-        let args = {
-            torrent_file_path: "Q:\\md-archive\\torrents\\test.torrent",    //Where the .torrent-file is located at
-            anidex_description: "TESTING 123123 \n\n line break",   //Description for anidex
-            anidex_hentai: 0,         //Is the manga considered adult content
-            anidex_subcat_id: process.env.ANIDEX_SUBCAT_ID,
-            anidex_api_key: process.env.ANIDEX_APIKEY,
-            anidex_private: 1,
-            anidex_debug: process.env.ANIDEX_DEBUG
-        };
-        console.log("Uploading torrent...", args);
-        TorrentCreate.postTorrent(args, (uploadId) => {
-            console.log(uploadId);
-        })
-
-    });*/
 };
 
 const run = function() {
@@ -434,6 +466,13 @@ const run = function() {
     let delay = (process.env.SCRAPE_INTERVAL_SECONDS || 15 * 60);
 
     scrapeMangaList(1, () => {
+
+        if (isStopRequested()) {
+            console.log("Exiting...");
+            process.exit(0);
+            return;
+        }
+
         console.log("End of run cycle. Sleeping "+delay+" seconds until next cycle.");
         setTimeout(run, delay * 1000);
     });

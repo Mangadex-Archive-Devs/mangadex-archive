@@ -6,12 +6,16 @@ require('dotenv').config();
 const app = require('commander');
 const srv = require('./srv');
 
-app.version('0.9.0')
+const version = '0.9.0';
+
+global.version = version;
+
+app.version(version)
     .command('run')
     .option('--no-upload', 'Dont upload torrent file to anidex')
     .option('--no-db', 'Dont update db entries')
     .option('--no-images', 'Dont download any images')
-    .option('--write-stats', 'Write stats to the db')
+    .option('--stats', 'Write stats to the db')
     .action(srv.boot);
 
 app.parse(process.argv);

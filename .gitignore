@@ -62,4 +62,4 @@ runnerConfig.yml
 .idea
 
 # Database
-manga.db
+manga.db*

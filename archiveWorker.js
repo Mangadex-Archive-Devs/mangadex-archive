@@ -7,6 +7,7 @@ const events = require('events');
 const request = require('request');
 const RateLimiter = require('limiter').RateLimiter;
 const imageLimiter = new RateLimiter(1, 500); // x requests every y ms
+const notify = require('./notify');
 
 var method = ArchiveWorker.prototype;
 
@@ -64,6 +65,25 @@ method.getMangaId = function () {
     return this._manga.id;
 };
 
+method.addInfoFile = function ()
+{
+    let destinationPath = path.join(process.env.BASE_DIR, this.getMangaDirname());
+
+    if (!fs.existsSync(destinationPath))
+        fs.mkdirSync(destinationPath);
+
+    destinationPath = path.join(destinationPath, "info.txt");
+
+    let infoRaw = fs.readFileSync('info.template.txt', 'utf8')
+        .replace(/{id}/i, this._manga.id)
+        .replace(/{title}/i, this._manga.title)
+        .replace(/{url}/i, "https://mangadex.info/manga/"+this._manga.id)
+        .replace(/{description}/i, this.getMangaDescription())
+        .replace(/{date}/i, moment(Date.now()).format('MMMM Do YYYY, h:mm:ss a'))
+        .replace(/{version}/i, global.version);
+    fs.writeFileSync(destinationPath, infoRaw, {encoding: 'utf8'});
+};
+
 method.addChapter = function (chapter)
 {
     //console.log(chapter);
@@ -91,7 +111,7 @@ method.addChapter = function (chapter)
             let ext = page.split('.')[1];
             let destinationPath = path.join(dirname, pageNum.toString().padStart(3, '0')+"."+ext);
 
-            if (fs.existsSync(destinationPath)) {
+            if (!process.flags.images || fs.existsSync(destinationPath)) {
                 //console.log("File "+destinationPath+" already exists. Skipping...");
                 continue;
             }
@@ -103,19 +123,21 @@ method.addChapter = function (chapter)
                     let imgUrl = chapter.url.toString() + page;
 
                     request.get(imgUrl).on('response', (res) => {
-                        if (res.statusCode !== 200)
+                        if (res.statusCode !== 200) {
                             reject("Failed to download "+imgUrl+", statusCode: "+res.statusCode);
+                        } else {
+                            console.info("Downloading "+imgUrl);
 
-                        //console.log(i, imgUrl, " -> ", destinationPath);
-
-                        res.pipe(fs.createWriteStream(destinationPath));
-                        res.on('end', resolve);
+                            res.pipe(fs.createWriteStream(destinationPath));
+                            res.on('end', resolve);
+                        }
                     });
                 });
             }));
         }
         Promise.all(imageWorkers).then(resolve).catch((reason) => {
             console.error("Imageworker threw an exception: "+reason);
+            notify.err("Imageworker threw an exception: "+(reason ? reason.toString() : "no reason"));
             reject();
         });
     });
@@ -125,12 +147,14 @@ method.addChapter = function (chapter)
         // Last chapter worker has been added. Time to start the downloads
         Promise.all(self._promiseWorkers).then(() => {
 
-            console.log(util.format("Archive Worker finished downloading %d chapters.", self._manga.numChapters));
+            console.log(util.format("Archive Worker finished downloading "+self._manga.title+" with %d chapters.", self._manga.numChapters));
+            notify.info("Archive worker finished downloading "+self._manga.title+" with "+self._manga.numChapters+" chapters");
             self._callback(self);
 
         }).catch((reason) => {
 
             console.error(util.format("Archive Worker failed while trying to download chapter. Reason: %s", reason.toString()));
+            notify.err("Archive worker failed while trying to download chapter. Reason: "+(reason ? reason.toString() : "no reason"));
             throw new Error();
 
         });
