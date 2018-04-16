@@ -6,6 +6,8 @@ const limiter = new RateLimiter(1, 2000); // x requests every y ms
 const request = require('request');
 const moment = require('moment');
 const dom = require('cheerio');
+const Entities = require('html-entities').AllHtmlEntities;
+const entities = new Entities();
 //const {getManga, getChapter} = require('./o7');
 //const {getManga, getChapter} = require('mangadex-req');
 const {getManga, getChapter} = require('./md-api.js');
@@ -78,7 +80,7 @@ function scrapeMangaList(page = 1, allPagesDoneCb)
                             manga.push({
                                 id: parseInt(url.toString().split('/')[2]),
                                 url: url,
-                                title: $(node).text().trim()
+                                title: entities.decode($(node).find('a').attr('title') || $(node).text().trim())
                             });
                         } catch (e) {
                             console.log("Exception ", e);
@@ -307,6 +309,7 @@ function checkManga(manga, archiveWorkerResult)
 
             for (let i = 0; i < mangaInfo.chapter.length; i++) {
                 let ch = mangaInfo.chapter[i];
+                ch.ctitle = entities.decode(ch.ctitle);
 
                 // Only include english chapters
                 if (ch.lang !== 'gb') continue;
@@ -331,7 +334,7 @@ function checkManga(manga, archiveWorkerResult)
                     groups.push(ch.groups[j].gname);
                 }
                 */
-                let groups = ch.groups.map(group => group.group);
+                let groups = ch.groups.map(group => entities.decode(group.group));
 
                 let chapterInfo = {
                     id: ch.cid,
@@ -400,7 +403,7 @@ function checkManga(manga, archiveWorkerResult)
                     chEnd: chapterHigh,
                     numChapters: chapters.length,
                     lastUpload: lastUpload,
-                    description: mangaInfo.manga.description,
+                    description: entities.decode(mangaInfo.manga.description),
                     artist: mangaInfo.manga.artist,
                     author: mangaInfo.manga.author,
                     genres: genres,
@@ -408,7 +411,6 @@ function checkManga(manga, archiveWorkerResult)
                     // Archive worker created
                     archiveWorkerResult(worker);
                 });
-                worker.addInfoFile();
                 //console.log("Created new archiveWorker for title "+manga.title);
 
                 // Foreach chapter we want to archive, fetch the detailed chapter data, which contains pages and more info
@@ -433,14 +435,11 @@ function checkManga(manga, archiveWorkerResult)
                                 });
                             }
 
-                        }).catch((err) => {throw err;}); // Fixes deprecated rethrow warning
-                            /* This will not be catched, so the whole manga fails when one chapter fails
-                            .catch((err) => {
-                                console.err(err);
-                                notify.err(err);
-                                archiveWorkerResult(null);
-                            });
-                            */
+                        }).catch((err) => {
+                            console.error(err);
+                            notify.err(err);
+                            archiveWorkerResult(null);
+                        });
                     });
                 }
             } else {
@@ -480,15 +479,17 @@ const boot = function(cmd)
         stats: cmd.stats || false
     };
 
-    db.ready(run);
+    db.ready(() => {
+        run(cmd.resume || 1);
+    });
 
 };
 
-const run = function() {
+const run = function(pageStart = 1) {
 
     let delay = (process.env.SCRAPE_INTERVAL_SECONDS || 15 * 60);
 
-    scrapeMangaList(1, () => {
+    scrapeMangaList(pageStart, () => {
 
         if (isStopRequested()) {
             console.log("Exiting...");

@@ -8,7 +8,7 @@ const srv = require('./srv');
 
 const version = '0.9.0';
 
-global.version = version;
+global.thisVersion = version;
 
 app.version(version)
     .command('run')
@@ -16,6 +16,7 @@ app.version(version)
     .option('--no-db', 'Dont update db entries')
     .option('--no-images', 'Dont download any images')
     .option('--stats', 'Write stats to the db')
+    .option('-r, --resume <n>', 'Start at the specified page', parseInt)
     .action(srv.boot);
 
 app.parse(process.argv);

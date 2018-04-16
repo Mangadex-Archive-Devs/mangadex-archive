@@ -119,8 +119,15 @@ module.exports = {
             const tx = body.toString();
 
             try {
-                let [, volume, chap, title] = tx.match(/<title>(?:Vol\. (\S+))?\s*(?:Ch\. (\S+))?\s*\((.+?)\) - MangaDex<\/title>/);
-                //let [, thumb]= tx.match(/<meta property="og:image" content="(.+\/\d+\.thumb\.[^"]+)">/);
+                let tmatch = tx.match(/<title>(?:Vol\. (\S+))?\s*(?:Ch\. (\S+))?\s*\((.+?)\) - MangaDex<\/title>/);
+                let volume, chap, title, isOneshot;
+                if (tmatch && tmatch.length >= 4) {
+                    //[, volume, chap, title] = tmatch; // TODO: dont really use any of that info
+                    isOneshot = false;
+                } else {
+                    isOneshot = true;
+                }
+                //let [, thumb]= tx.match(/<meta property="og:image" content="(.+\/\d+\.thumb\.[^"]+)">/); // breaks when manga doesnt have thumbnail
                 let [, chid] = tx.match(/var chapter_id = (\d+);/);
                 let [, pchid]= tx.match(/var prev_chapter_id = (\d+);/);
                 let [, nchid]= tx.match(/var next_chapter_id = (\d+);/);
@@ -136,7 +143,8 @@ module.exports = {
 
                 let chapterInfo = {
                     dataurl: dataurl,
-                    pages: pages
+                    pages: pages,
+                    isOneshot: isOneshot
                 };
 
                 //console.log(parr, pages);

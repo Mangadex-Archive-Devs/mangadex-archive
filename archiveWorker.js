@@ -74,14 +74,37 @@ method.addInfoFile = function ()
 
     destinationPath = path.join(destinationPath, "info.txt");
 
+    this._chapters.sort((a, b) => {
+        let vdiff = a.vol - b.vol;
+        return vdiff !== 0 ? vdiff : a.ch - b.ch;
+    });
+
+    let vol = this._chapters[0].vol;
+    let chapterList = "Volume "+vol+"\n";
+    for (let i = 0; i < this._chapters.length; i++) {
+        let ch = this._chapters[i];
+        if (ch.vol !== vol) {
+            // Print volume line
+            chapterList += "Volume "+ch.vol+"\n";
+            vol = ch.vol;
+        }
+        // Print chapter line
+        chapterList += " * Chapter "+ch.ch+" - ";
+        // Print title line
+        chapterList += ch.title ? ch.title : "(no title)";
+        chapterList += "\n";
+    }
+
+    // TODO: GroupList
+
     let infoRaw = fs.readFileSync('info.template.txt', 'utf8')
         .replace(/{id}/i, this._manga.id)
         .replace(/{title}/i, this._manga.title)
         .replace(/{url}/i, "https://mangadex.info/manga/"+this._manga.id)
         .replace(/{description}/i, this.getMangaDescription())
         .replace(/{date}/i, moment(Date.now()).format('MMMM Do YYYY, h:mm:ss a'))
-        .replace(/{version}/i, global.version)
-        .replace(/{chapterlist}/i, "TODO");
+        .replace(/{version}/i, global.thisVersion)
+        .replace(/{chapterlist}/i, chapterList);
     fs.writeFileSync(destinationPath, infoRaw, {encoding: 'utf8'});
 };
 
@@ -89,6 +112,8 @@ method.addChapter = function (chapter)
 {
     //console.log(chapter);
     let self = this;
+
+    this._chapters.push(chapter);
 
     // Add new chapter downloader
     let promiseWorker = new Promise((resolve, reject) => {
@@ -102,7 +127,7 @@ method.addChapter = function (chapter)
         if (!fs.existsSync(dirname))
             fs.mkdirSync(dirname);
 
-        console.log(dirname);
+        console.log("Ch. dest: "+dirname);
 
         let imageWorkers = [];
 
@@ -152,6 +177,10 @@ method.addChapter = function (chapter)
 
             console.log(util.format("Archive Worker finished downloading "+self._manga.title+" with %d chapters.", self._manga.numChapters));
             notify.info("Archive worker finished downloading "+self._manga.title+" with "+self._manga.numChapters+" chapters");
+
+            // Add info file after all chapters have been parsed & downloaded
+            this.addInfoFile();
+
             self._callback(self);
 
         }).catch((reason) => {
