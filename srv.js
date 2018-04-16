@@ -49,105 +49,121 @@ function scrapeMangaList(page = 1, allPagesDoneCb)
             },
             (err, response, body) => {
 
-                console.log("page request responeded with "+response.statusCode+" and "+body.length+" bytes");
+                try {
 
-                if (err || response.statusCode !== 200) {
-                    console.error("Failed to retrieve manga list!");
-                    notify.err("Failed to retrieve manga list, response code: "+response.statusCode+", err: "+err.toString());
-                    nextPage(page+1, allPagesDoneCb);
-                    return false;
-                }
+                    console.log("page request responeded with "+response.statusCode+" and "+body.length+" bytes");
 
-                // If no manga are found, we are probably at the end of the list
-
-                let re = /There are no titles found with your search criteria/i;
-                let match = body.toString().match(re);
-                if (match && match.length > 0) {
-                    console.log("End of mangalist reached.");
-                    allPagesDoneCb();
-                    return true;
-                }
-
-                let manga = [];
-                let $ = dom.load(body.toString());
-                $('#content table tbody tr td:nth-child(2)').each((i, node) => {
-                    try {
-                        let url = $(node).find('a').attr('href');
-                        manga.push({
-                            id: parseInt(url.toString().split('/')[2]),
-                            url: url,
-                            title: $(node).text().trim()
-                        });
-                    } catch (e) {
-                        console.log("Exception ", e);
-                    }
-                });
-                //console.log(manga);
-
-                let mangaChecklist = [];
-
-                // TODO TEST, must be manga that are actually archiveable
-                //manga = [manga[1], manga[2]];
-
-                if (manga.length < 1) {
-                    console.log("Page "+page+" has no manga that can be archived.");
-                    limiter.removeTokens(1, () => {
+                    if (err || response.statusCode !== 200) {
+                        console.error("Failed to retrieve manga list!");
+                        notify.err("Failed to retrieve manga list, response code: "+response.statusCode+", err: "+err.toString());
                         nextPage(page+1, allPagesDoneCb);
+                        return false;
+                    }
+
+                    // If no manga are found, we are probably at the end of the list
+
+                    let re = /There are no titles found with your search criteria/i;
+                    let match = body.toString().match(re);
+                    if (match && match.length > 0) {
+                        console.log("End of mangalist reached.");
+                        allPagesDoneCb();
                         return true;
+                    }
+
+                    let manga = [];
+                    let $ = dom.load(body.toString());
+                    $('#content table tbody tr td:nth-child(2)').each((i, node) => {
+                        try {
+                            let url = $(node).find('a').attr('href');
+                            manga.push({
+                                id: parseInt(url.toString().split('/')[2]),
+                                url: url,
+                                title: $(node).text().trim()
+                            });
+                        } catch (e) {
+                            console.log("Exception ", e);
+                        }
                     });
-                } else {
+                    //console.log(manga);
 
-                    for (let i = 0; i < manga.length; i++) {
+                    let mangaChecklist = [];
 
-                        let element = manga[i];
+                    // TODO TEST, must be manga that are actually archiveable
+                    //manga = [manga[1], manga[2]];
 
-                        if (db.isArchived(element.id)) {
-                            console.log("manga #"+element.id+" ("+element.title+") is already archived.");
-                            continue;
+                    if (manga.length < 1) {
+                        console.log("Page "+page+" has no manga that can be archived.");
+                        limiter.removeTokens(1, () => {
+                            nextPage(page+1, allPagesDoneCb);
+                            return true;
+                        });
+                    } else {
+
+                        for (let i = 0; i < manga.length; i++) {
+
+                            let element = manga[i];
+
+                            if (db.isArchived(element.id)) {
+                                console.log("manga #"+element.id+" ("+element.title+") is already archived.");
+                                continue;
+                            }
+
+                            let mangaCheck = new Promise((resolve, reject) => {
+                                try {
+                                    checkManga(element, (archiveWorker) => {
+                                        // Manga is now downloaded, archiveWorker holds all the necessary data
+
+                                        if (archiveWorker != null)
+                                            enqueueTorrentCreation(archiveWorker); // if we get an archive worker, add it to the queue
+
+                                        resolve(); // mark this manga as checked
+                                    });
+                                } catch (e) {
+                                    reject(e);
+                                }
+                            });
+                            mangaChecklist.push(mangaCheck);
                         }
 
-                        let mangaCheck = new Promise((resolve, reject) => {
-                            try {
-                                checkManga(element, (archiveWorker) => {
-                                    // Manga is now downloaded, archiveWorker holds all the necessary data
-
-                                    if (archiveWorker != null)
-                                        enqueueTorrentCreation(archiveWorker); // if we get an archive worker, add it to the queue
-
-                                    resolve(); // mark this manga as checked
-                                });
-                            } catch (e) {
-                                reject(e);
-                            }
-                        });
-                        mangaChecklist.push(mangaCheck);
-                    }
-
-                    Promise.all(mangaChecklist)
-                        .then(() => {
-                            // All manga have been downloaded and the queues have been filled, proceed with torrent creation and uploading
-                            console.log("Scraping of page "+page+" complete.");
-
-                            processTorrentCreationQueue(() => {
-                                // after that...
-                                processTorrentUploadQueue(() => {
-                                    // all uploaded...
-
-                                    // clear the queues
-                                    clearQueues();
-
-                                    // start on the next page
-                                    nextPage(page+1, allPagesDoneCb);
-                                });
-                            });
-                        })
-                        .catch((err) => {
-                            console.error("Error thrown during scrape of page "+page, err);
-                            notify.err("Error thrown during scrape of page "+page+": "+err.toString());
+                        if (mangaChecklist.length < 1) {
+                            console.warn("mangaChecklist on page "+page+" is empty, this is not supposed to happen...");
+                            notify.warn("Page "+page+" has empty checklist");
                             clearQueues();
                             nextPage(page+1, allPagesDoneCb);
-                        });
-                    return true;
+                        } else {
+                            Promise.all(mangaChecklist)
+                                .then(() => {
+                                    // All manga have been downloaded and the queues have been filled, proceed with torrent creation and uploading
+                                    console.log("Scraping of page "+page+" complete.");
+
+                                    processTorrentCreationQueue(() => {
+                                        // after that...
+                                        processTorrentUploadQueue(() => {
+                                            // all uploaded...
+
+                                            // clear the queues
+                                            clearQueues();
+
+                                            // start on the next page
+                                            nextPage(page+1, allPagesDoneCb);
+                                        });
+                                    });
+                                })
+                                .catch((err) => {
+                                    console.error("Error thrown during scrape of page "+page, err);
+                                    notify.err("Error thrown during scrape of page "+page+": "+err.toString());
+                                    clearQueues();
+                                    nextPage(page+1, allPagesDoneCb);
+                                });
+                        }
+
+                    }
+
+                } catch (err) {
+                    console.error("Page crawl error on page", page, err);
+                    notify.err("Page crawl error on page "+page+": "+err.toString());
+                    clearQueues();
+                    nextPage(page+1, allPagesDoneCb);
                 }
 
             });
