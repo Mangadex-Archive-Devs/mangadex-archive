@@ -15,7 +15,8 @@
     "npm": "^5.8.0",
     "request": "^2.85.0",
     "sanitize-filename": "^1.6.1",
-    "sqlite3": "^4.0.0"
+    "sqlite3": "^4.0.0",
+    "typescript": "^2.8.1"
   },
   "devDependencies": {},
   "scripts": {
