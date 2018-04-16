@@ -80,7 +80,8 @@ method.addInfoFile = function ()
         .replace(/{url}/i, "https://mangadex.info/manga/"+this._manga.id)
         .replace(/{description}/i, this.getMangaDescription())
         .replace(/{date}/i, moment(Date.now()).format('MMMM Do YYYY, h:mm:ss a'))
-        .replace(/{version}/i, global.version);
+        .replace(/{version}/i, global.version)
+        .replace(/{chapterlist}/i, "TODO");
     fs.writeFileSync(destinationPath, infoRaw, {encoding: 'utf8'});
 };
 
@@ -112,6 +113,8 @@ method.addChapter = function (chapter)
             let destinationPath = path.join(dirname, pageNum.toString().padStart(3, '0')+"."+ext);
 
             if (!process.flags.images || fs.existsSync(destinationPath)) {
+                let imgUrl = chapter.url.toString() + page;
+                //console.log("Skipping "+imgUrl);
                 //console.log("File "+destinationPath+" already exists. Skipping...");
                 continue;
             }

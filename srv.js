@@ -6,10 +6,12 @@ const limiter = new RateLimiter(1, 2000); // x requests every y ms
 const request = require('request');
 const moment = require('moment');
 const dom = require('cheerio');
-const {getManga, getChapter} = require('./o7');
+//const {getManga, getChapter} = require('./o7');
+//const {getManga, getChapter} = require('mangadex-req');
+const {getManga, getChapter} = require('./md-api.js');
 
 const ArchiveWorker = require('./archiveWorker');
-const TorrentCreate = require('./torrent-processor/index.js');
+const TorrentCreate = require('mangadex-archive-torrent-processor');
 
 const DbWrapper = require('./db');
 const db = new DbWrapper();
@@ -18,8 +20,6 @@ const notify = require('./notify');
 
 let torrentCreationQueue = [];
 let torrentUploadQueue = [];
-
-let missingEndTagWarned = [];
 
 let _isStopRequested = false;
 
@@ -277,7 +277,7 @@ function checkManga(manga, archiveWorkerResult)
                 return;
             }
 
-            let statusCompleted = mangaInfo.manga.status.status === "completed";
+            let statusCompleted = mangaInfo.manga.status === "completed";
             let lastUpload = -1;
             let hasEndTag = false;
             let volumeLow = Infinity;
@@ -315,7 +315,7 @@ function checkManga(manga, archiveWorkerResult)
                     groups.push(ch.groups[j].gname);
                 }
                 */
-                let groups = ch.groups.map(group => group.gname);
+                let groups = ch.groups.map(group => group.group);
 
                 let chapterInfo = {
                     id: ch.cid,
@@ -417,7 +417,14 @@ function checkManga(manga, archiveWorkerResult)
                                 });
                             }
 
-                        });
+                        }).catch((err) => {throw err;}); // Fixes deprecated rethrow warning
+                            /* This will not be catched, so the whole manga fails when one chapter fails
+                            .catch((err) => {
+                                console.err(err);
+                                notify.err(err);
+                                archiveWorkerResult(null);
+                            });
+                            */
                     });
                 }
             } else {
