@@ -17,21 +17,44 @@ const pinger = (host, err, dur, pl) => {
 		connections.delete(host);
 		return;
 	}
-	console.log('ping to %s ack in %f with pl %s', host, dur, pl.toString('hex'))
+	//console.log('ping to %s ack in %f with pl %s', host, dur, pl.toString('hex'))
 };
 const getConnection = url => {
 	const h = new URL(url);
 	let c = connections.get(h.hostname);
-	if (c) return c;
+	if (c && !c.destroyed) return c;
+	else if (c != null && c.destroyed) {
+		console.log("Recovering http2 connection...");
+	}
 
 	let connection = http2.connect(h.origin);
+	connection.on('goaway', (errorCode, lastStreamID, opaqueData) => {
+        console.error('goaway event received with errorCode '+errorCode);
+        connections.set(h.hostname, null);
+        manga = getConnection(base);
+    });
+    connection.on('error', () => {
+        console.error('error event received');
+        connections.set(h.hostname, null);
+        manga = getConnection(base);
+    });
+    connection.on('frameError', (frameType, errorCode, stream) => {
+        console.error('frameError event received with errorCode '+errorCode);
+        connections.set(h.hostname, null);
+        manga = getConnection(base);
+    });
+    connection.on('timeout', () => {
+        console.error('timeot event received');
+        connections.set(h.hostname, null);
+        manga = getConnection(base);
+    });
 	//connection.pinging = setInterval(connection.ping.bind(connection, pinger.bind(null, h.hostname)), 2e4);
 	connections.set(h.hostname, connection);
 	return connection;
 };
 
 const base = new URL(process.env.BASE_URL || 'https://mangadex.org');
-const manga = getConnection(base);
+let manga = getConnection(base);
 
 
 const ua = 'Mozilla/5.0 (Windows NT 6.3; WOW64)';
