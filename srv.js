@@ -75,7 +75,7 @@ function scrapeMangaList(page = 1, allPagesDoneCb)
 
                     let manga = [];
                     let $ = dom.load(body.toString());
-                    $('#content table tbody tr td:nth-child(2)').each((i, node) => {
+                    $('#content table tbody tr td:nth-child(3)').each((i, node) => {
                         try {
                             let url = $(node).find('a').attr('href');
                             manga.push({
