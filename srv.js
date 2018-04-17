@@ -287,8 +287,10 @@ function checkManga(manga, archiveWorkerResult)
 {
     getManga(manga.id).then((mangaInfo) => {
         try {
-
             //console.log(mangaInfo, mangaInfo.manga.status, mangaInfo.chapter);
+
+            // Fix fields
+            mangaInfo.manga.description = entities.decode(mangaInfo.manga.description);
 
             if (mangaInfo.chapter == null || mangaInfo.chapter.length < 1) {
                 archiveWorkerResult(null);
@@ -382,7 +384,7 @@ function checkManga(manga, archiveWorkerResult)
             }
 
             if (process.flags.stats) {
-                db.addStats(manga.id, manga.title, volumeLow, volumeHigh-volumeLow+1, chapterLow, chapters.length, chapterGapCount, lastUpload, hasEndTag, statusCompleted ? "Completed" : "Ongoing", condition);
+                db.addStats(manga.id, manga.title, volumeLow, volumeHigh-volumeLow+1, chapterLow, chapters.length, chapterGapCount, lastUpload, hasEndTag, statusCompleted ? "Completed" : "Ongoing", condition, mangaInfo.manga.description);
             }
 
             if (condition) {
@@ -403,7 +405,7 @@ function checkManga(manga, archiveWorkerResult)
                     chEnd: chapterHigh,
                     numChapters: chapters.length,
                     lastUpload: lastUpload,
-                    description: entities.decode(mangaInfo.manga.description),
+                    description: mangaInfo.manga.description,
                     artist: mangaInfo.manga.artist,
                     author: mangaInfo.manga.author,
                     genres: genres,

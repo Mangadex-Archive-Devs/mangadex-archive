@@ -73,11 +73,11 @@ method.setArchived = function (mangaId, anidexId = 0, isArchived = true) {
     }
 };
 
-method.addStats = function (mangaId, mangaTitle, volStart, volCount, chStart, chCount, chGaps, lastUpload, hasEndTag, status, isArchiveable) {
+method.addStats = function (mangaId, mangaTitle, volStart, volCount, chStart, chCount, chGaps, lastUpload, hasEndTag, status, isArchiveable, description) {
     try {
-        let stmt = this._db.prepare("REPLACE INTO stats VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        let stmt = this._db.prepare("REPLACE INTO stats VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         stmt.run(
-            mangaId, mangaTitle, volStart, volCount, chStart, chCount, chGaps, lastUpload, hasEndTag, status, isArchiveable
+            mangaId, mangaTitle, volStart, volCount, chStart, chCount, chGaps, lastUpload, hasEndTag, status, isArchiveable, description
         );
     } catch (e) {
         console.error("Failed to write stats into db:", e);
