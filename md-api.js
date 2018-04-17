@@ -81,20 +81,22 @@ module.exports = {
 
     getManga: (mangaId) => new Promise((resolve, reject) => {
 
+        let url = (process.env.BASE_URL || 'https://mangadex.org') + '/api/3640f3fb/' + mangaId;
         request.get({
-            url: (process.env.BASE_URL || 'https://mangadex.org') + '/api/3640f3fb/' + mangaId,
+            url: url,
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 6.3; WOW64)'
-            }
+            },
+            timeout: (process.env.REQUEST_TIMEOUT || 5) * 1000
         }, (err, response, body) => {
             if (err) {
                 reject(err);
             } else if (response.statusCode !== 200) {
-                reject("Invalid status code "+response.statusCode);
+                reject("Invalid status code "+response.statusCode+" for url "+url);
             }
             let jsonBody = JSON.parse(body.toString(), mangarev);
             if (!jsonBody.manga) {
-                reject("Failed to parse response body as JSON");
+                reject("Failed to parse response body as JSON for url "+url);
             }
 
             resolve(jsonBody);
@@ -105,28 +107,25 @@ module.exports = {
     getChapter: (chapterId) => new Promise((resolve, reject) => {
 
         let base = (process.env.BASE_URL || 'https://mangadex.org');
+        let url = base + '/chapter/' + chapterId;
 
         request.get({
-            url: base + '/chapter/' + chapterId,
+            url: url,
+            timeout: (process.env.REQUEST_TIMEOUT || 5) * 1000
         }, (err, response, body) => {
             if (err) {
                 reject(err);
             } else if (response.statusCode !== 200) {
-                reject("Invalid status code "+response.statusCode);
+                reject("Invalid status code "+response.statusCode+" for url "+url);
             } else if (body.toString().length < 1) {
-                reject("Empty response body");
+                reject("Empty response body for url "+url);
             }
             const tx = body.toString();
 
             try {
                 let tmatch = tx.match(/<title>(?:Vol\. (\S+))?\s*(?:Ch\. (\S+))?\s*\((.+?)\) - MangaDex<\/title>/);
-                let volume, chap, title, isOneshot;
-                if (tmatch && tmatch.length >= 4) {
-                    //[, volume, chap, title] = tmatch; // TODO: dont really use any of that info
-                    isOneshot = false;
-                } else {
-                    isOneshot = true;
-                }
+                let volume, chap, title;
+                let isOneshot = !(tmatch && tmatch.length >= 4);
                 //let [, thumb]= tx.match(/<meta property="og:image" content="(.+\/\d+\.thumb\.[^"]+)">/); // breaks when manga doesnt have thumbnail
                 let [, chid] = tx.match(/var chapter_id = (\d+);/);
                 let [, pchid]= tx.match(/var prev_chapter_id = (\d+);/);

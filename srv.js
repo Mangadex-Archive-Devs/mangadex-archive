@@ -47,7 +47,8 @@ function scrapeMangaList(page = 1, allPagesDoneCb)
                 url: url,
                 headers: {
                     'cookie': 'mangadex_title_mode=1'
-                }
+                },
+                timeout: (process.env.REQUEST_TIMEOUT || 5) * 1000
             },
             (err, response, body) => {
 

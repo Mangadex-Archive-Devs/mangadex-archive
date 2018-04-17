@@ -150,7 +150,10 @@ method.addChapter = function (chapter)
 
                     let imgUrl = chapter.url.toString() + page;
 
-                    request.get(imgUrl).on('response', (res) => {
+                    request.get({
+                        url: imgUrl,
+                        timeout: (process.env.REQUEST_TIMEOUT || 5) * 1000
+                    }).on('response', (res) => {
                         if (res.statusCode !== 200) {
                             reject("Failed to download "+imgUrl+", statusCode: "+res.statusCode);
                         } else {
