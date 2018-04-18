@@ -1,8 +1,9 @@
 const request = require('request');
 const RateLimiter = require('limiter').RateLimiter;
 const limiter = new RateLimiter(1, 1000); // x requests every y ms
+const moment = require('moment');
 
-const sendMsg = function (msg, url, color) {
+const sendMsg = function (msg, url, color, footer = null) {
     let pl = {
         "embeds": [
             {
@@ -15,8 +16,14 @@ const sendMsg = function (msg, url, color) {
                     },
                 ]
             },
-        ]
+        ],
+        "timestamp": moment(Date.now(), moment.ISO_8601).format()
     };
+    if (footer) {
+        pl.embeds[0].footer = {
+            "text": footer
+        };
+    }
 
     request.post({
         url: url,
@@ -36,21 +43,21 @@ const webHook = {
 
 module.exports = {
 
-    info: function (message) {
+    info: function (message, trace = null) {
         limiter.removeTokens(1, () => {
-            sendMsg(message, webHook.info, 0xd3eeef);
+            sendMsg(message, webHook.info, 0xd3eeef, trace);
         })
     },
 
-    warn: function (message) {
+    warn: function (message, trace = null) {
         limiter.removeTokens(1, () => {
-            sendMsg(message, webHook.warning, 0xfff206);
+            sendMsg(message, webHook.warning, 0xfff206, trace);
         })
     },
 
-    err: function (message) {
+    err: function (message, trace = null) {
         limiter.removeTokens(1, () => {
-            sendMsg(message, webHook.error, 0xff0606);
+            sendMsg(message, webHook.error, 0xff0606, trace);
         })
     }
 
