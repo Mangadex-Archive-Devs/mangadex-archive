@@ -46,7 +46,7 @@ function scrapeMangaList(page = 1, allPagesDoneCb)
             {
                 url: url,
                 headers: {
-                    'cookie': 'mangadex_title_mode=1'
+                    'cookie': 'mangadex_title_mode=2'
                 },
                 timeout: (process.env.REQUEST_TIMEOUT || 5) * 1000
             },
@@ -75,9 +75,13 @@ function scrapeMangaList(page = 1, allPagesDoneCb)
 
                     let manga = [];
                     let $ = dom.load(body.toString());
-                    $('#content table tbody tr td:nth-child(3)').each((i, node) => {
+                    $('#content table tbody tr td:nth-child(2)').each((i, node) => {
                         try {
                             let url = $(node).find('a').attr('href');
+                            if (!url) {
+                                console.error("Could not find url node while parsing mangalist on page "+page);
+                                return;
+                            }
                             manga.push({
                                 id: parseInt(url.toString().split('/')[2]),
                                 url: url,
@@ -483,7 +487,11 @@ const boot = function(cmd)
     };
 
     db.ready(() => {
-        run(cmd.resume || 1);
+        try {
+            run(cmd.resume || 1);
+        } catch (err) {
+            notify.err("APPCRASH! "+err.toString(), (new Error()).stack);
+        }
     });
 
 };
