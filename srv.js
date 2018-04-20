@@ -173,7 +173,9 @@ function scrapeMangaList(page = 1, allPagesDoneCb)
                     nextPage(page+1, allPagesDoneCb);
                 }
 
-            });
+            }).on('error', (err) => {
+                console.error("Page request failed!", err);
+        });
     });
 
 }
@@ -485,6 +487,8 @@ const boot = function(cmd)
         images: cmd.images,
         stats: cmd.stats || false
     };
+
+    console.log("Global timeout set to "+(process.env.REQUEST_TIMEOUT || 5)+" seconds.");
 
     db.ready(() => {
         try {

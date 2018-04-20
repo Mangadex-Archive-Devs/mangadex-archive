@@ -1,6 +1,7 @@
 const fs = require('fs');
 const request = require('request');
 const {URL} = require('url');
+const dom = require('cheerio');
 
 const stati = [
     'unknown',
@@ -104,8 +105,10 @@ module.exports = {
             } catch (err) {
                 reject("Error during parsing of api response: "+err.toString());
             }
+        }).on('error', (err) => {
+            console.error("request error in getManga("+mangaId+"): "+err.toString());
+            reject("request error in getManga("+mangaId+"): "+err.toString());
         });
-
     }),
 
     getChapter: (chapterId) => new Promise((resolve, reject) => {
@@ -126,6 +129,24 @@ module.exports = {
             }
 
             try {
+                //let $ = dom.load(body.toString(), {xmlMode: false});
+                //console.dir($('#ch-data'), {depth:Infinity});
+                //console.log($('#ch-data').innerText, $('#ch-data').innerHTML, $('#ch-data').text());
+                //process.exit();
+                let rx = /<script data-type=.chapter.>(.+)<\/script>/i;
+                let [,scriptText] = rx.exec(body.toString());
+                //console.log(scriptText);
+
+                //let chapterData = JSON.parse($('#ch-data').text().toString());
+                let chapterData = JSON.parse(scriptText);
+
+                let dataurl = new URL(chapterData.server + chapterData.dataurl + '/', base);
+                let pages = chapterData.page_array;
+                let manid = chapterData.manga_id;
+                let chid = chapterData.chapter_id;
+                let isOneshot = chapterData.chapter_title === "Oneshot";
+
+                /*
                 const tx = body.toString();
 
                 let tmatch = tx.match(/<title>(?:Vol\. (\S+))?\s*(?:Ch\. (\S+))?\s*\((.+?)\) - MangaDex<\/title>/);
@@ -142,6 +163,7 @@ module.exports = {
                 const dataurl = new URL(serve+hash+'/', base);
                 let pages = [];
                 eval('pages = '+parr);
+                */
                 const mdat = {dataurl, pages, mid: Number.parseInt(manid, 10), cid: Number.parseInt(chid), set: Date.now()};
                 durl.set(mdat.cid, mdat);
 
@@ -160,6 +182,9 @@ module.exports = {
                 reject("Failed parsing chapterInfo of chapterId "+chapterId+": "+err.toString());
             }
 
+        }).on('error', (err) => {
+            console.error("request error in getChapter("+chapterId+"): "+err.toString());
+            reject("request error in getChapter("+chapterId+"): "+err.toString());
         });
 
     })

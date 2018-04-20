@@ -32,6 +32,8 @@ const sendMsg = function (msg, url, color, footer = null) {
             'Length': JSON.stringify(pl).length
         },
         json: pl
+    }).on('error', (err) => {
+        console.error("failed to send discord request", err);
     });
 };
 

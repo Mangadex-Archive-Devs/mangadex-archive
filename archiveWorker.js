@@ -162,6 +162,9 @@ method.addChapter = function (chapter)
                             res.pipe(fs.createWriteStream(destinationPath));
                             res.on('end', resolve);
                         }
+                    }).on('error', (err) => {
+                        console.error("Failed to download image from "+imgUrl, err);
+                        reject("Failed to download image from "+imgUrl);
                     });
                 });
             }));
@@ -169,6 +172,9 @@ method.addChapter = function (chapter)
         Promise.all(imageWorkers).then(resolve).catch((reason) => {
             console.error("Imageworker threw an exception: "+reason);
             notify.err("Imageworker threw an exception: "+(reason ? reason.toString() : "no reason"));
+            reject();
+        }).catch((err) => {
+            console.error("Image worker promise error", err);
             reject();
         });
     });

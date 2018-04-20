@@ -40,6 +40,8 @@ method.ready = function (cb)
     Promise.all(loadDb).then(() => {
         //console.log("DB State:", this);
         cb();
+    }).catch((err) => {
+        console.error("DB error", err);
     });
 };
 
