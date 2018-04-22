@@ -20,6 +20,10 @@
 
 {chapterlist}
 
+==== GROUP LIST ====
+
+{grouplist}
+
 ==== ARCHIVE INFO ====
 
 - Date Archived: {date}

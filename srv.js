@@ -2,7 +2,7 @@ const util = require('util');
 const fs = require('fs');
 const path = require('path');
 const RateLimiter = require('limiter').RateLimiter;
-const limiter = new RateLimiter(1, 2000); // x requests every y ms
+const limiter = new RateLimiter(1, 1600); // x requests every y ms
 const request = require('request');
 const moment = require('moment');
 const dom = require('cheerio');
@@ -337,13 +337,7 @@ function checkManga(manga, archiveWorkerResult)
                 volumeHigh = Math.max(volumeHigh, ch.vol);
                 chapterHigh = Math.max(chapterHigh, ch.ch);
 
-                /*
-                let groups = [];
-                for (let j = 0; j < ch.groups.length; j++) {
-                    groups.push(ch.groups[j].gname);
-                }
-                */
-                let groups = ch.groups.map(group => entities.decode(group.group));
+                let groups = ch.groups.map(group => entities.decode(group.group).toString().trim());
 
                 let chapterInfo = {
                     id: ch.cid,
@@ -462,6 +456,10 @@ function checkManga(manga, archiveWorkerResult)
             notify.err("Error while checking manga "+manga.id+": "+err.toString());
             archiveWorkerResult(null);
         }
+    }).catch((err) => {
+        console.error("Error while checking manga "+manga.id+": "+err.toString());
+        notify.err("Error while checking manga "+manga.id+": "+err.toString());
+        archiveWorkerResult(null);
     });
 }
 

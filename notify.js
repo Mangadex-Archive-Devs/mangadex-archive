@@ -1,6 +1,6 @@
 const request = require('request');
 const RateLimiter = require('limiter').RateLimiter;
-const limiter = new RateLimiter(1, 1000); // x requests every y ms
+const limiter = new RateLimiter(1, 2000); // x requests every y ms
 const moment = require('moment');
 
 const sendMsg = function (msg, url, color, footer = null) {

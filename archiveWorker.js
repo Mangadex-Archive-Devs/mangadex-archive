@@ -81,6 +81,8 @@ method.addInfoFile = function ()
 
     let vol = this._chapters[0].vol;
     let chapterList = "Volume "+vol+"\n";
+    let groupList = [];
+
     for (let i = 0; i < this._chapters.length; i++) {
         let ch = this._chapters[i];
         if (ch.vol !== vol) {
@@ -89,13 +91,21 @@ method.addInfoFile = function ()
             vol = ch.vol;
         }
         // Print chapter line
-        chapterList += " * Chapter "+ch.ch+" - ";
+        chapterList += " * Chapter "+ch.ch;
         // Print title line
-        chapterList += ch.title ? ch.title : "(no title)";
+        chapterList += ch.title ? " - "+ch.title : "";
         chapterList += "\n";
+
+        // Group
+        for (let j = 0; j < ch.groups.length; j++) {
+            let grp = ch.groups[j];
+            if (grp !== 'no group' && grp !== 'Unknown' && groupList.indexOf(grp) === -1)
+                groupList.push(" * "+grp);
+        }
     }
 
     // TODO: GroupList
+    let groupListString = "Groups:\n"+groupList.join("\n");
 
     let infoRaw = fs.readFileSync('info.template.txt', 'utf8')
         .replace(/{id}/i, this._manga.id)
@@ -104,7 +114,9 @@ method.addInfoFile = function ()
         .replace(/{description}/i, this.getMangaDescription())
         .replace(/{date}/i, moment(Date.now()).format('MMMM Do YYYY, h:mm:ss a'))
         .replace(/{version}/i, global.thisVersion)
-        .replace(/{chapterlist}/i, chapterList);
+        .replace(/{chapterlist}/i, chapterList)
+        .replace(/{grouplist}/i, groupListString)
+    ;
     fs.writeFileSync(destinationPath, infoRaw, {encoding: 'utf8'});
 };
 
