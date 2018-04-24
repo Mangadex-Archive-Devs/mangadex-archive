@@ -14,7 +14,7 @@
     "mangadex-req": "git+https://github.com/radonthetyrant/mangadex-req.git",
     "moment": "^2.22.0",
     "npm": "^5.8.0",
-    "request": "^2.85.0",
+    "request": "^2.83.0",
     "sanitize-filename": "^1.6.1",
     "sqlite3": "^4.0.0"
   },

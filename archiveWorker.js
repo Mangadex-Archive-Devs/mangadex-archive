@@ -24,7 +24,7 @@ function ArchiveWorker(mangaInfo, limiter, callback) {
 
 method.getMangaDescription = function ()
 {
-    return this._manga.description;
+    return this.stripJunk(this._manga.description);
 };
 
 method.getMangaDirname = function ()
@@ -100,12 +100,11 @@ method.addInfoFile = function ()
         for (let j = 0; j < ch.groups.length; j++) {
             let grp = ch.groups[j];
             if (grp !== 'no group' && grp !== 'Unknown' && groupList.indexOf(grp) === -1)
-                groupList.push(" * "+grp);
+                groupList.push(grp);
         }
     }
 
-    // TODO: GroupList
-    let groupListString = "Groups:\n"+groupList.join("\n");
+    let groupListString = groupList.map(g => "- "+g.trim().replace(/,\s*/i, '')).join("\n");
 
     let infoRaw = fs.readFileSync('info.template.txt', 'utf8')
         .replace(/{id}/i, this._manga.id)
@@ -114,10 +113,19 @@ method.addInfoFile = function ()
         .replace(/{description}/i, this.getMangaDescription())
         .replace(/{date}/i, moment(Date.now()).format('MMMM Do YYYY, h:mm:ss a'))
         .replace(/{version}/i, global.thisVersion)
-        .replace(/{chapterlist}/i, chapterList)
+        .replace(/{chapterlist}/i, chapterList.trim())
         .replace(/{grouplist}/i, groupListString)
     ;
     fs.writeFileSync(destinationPath, infoRaw, {encoding: 'utf8'});
+};
+
+method.stripJunk = function (string) {
+    // Strip useless shit
+    return string
+        .replace(/\[\/?(?:b|u|i|spoiler|list|url|\/\*)\]/i, '')
+        .replace(/<\/?[bui]>/i, '')
+        .replace(/<br\s*\/?>/i, "\n")
+        .replace(/\[\*\]/, '* ');
 };
 
 method.addChapter = function (chapter)

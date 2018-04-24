@@ -16,13 +16,13 @@
 
 {description}
 
-==== CHAPTER LIST ====
-
-{chapterlist}
-
 ==== GROUP LIST ====
 
 {grouplist}
+
+==== CHAPTER LIST ====
+
+{chapterlist}
 
 ==== ARCHIVE INFO ====
 
