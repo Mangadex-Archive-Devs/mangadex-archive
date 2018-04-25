@@ -122,10 +122,12 @@ method.addInfoFile = function ()
 method.stripJunk = function (string) {
     // Strip useless shit
     return string
+        .replace(/\[url=([^\s\]]+)\s*\](.*(?=\[\/url\]))\[\/url\]/g, '$1')
         .replace(/\[\/?(?:b|u|i|spoiler|list|url|\/\*)\]/i, '')
         .replace(/<\/?[bui]>/i, '')
         .replace(/<br\s*\/?>/i, "\n")
-        .replace(/\[\*\]/, '* ');
+        .replace(/\[\*\]/, '* ')
+        ;
 };
 
 method.addChapter = function (chapter)

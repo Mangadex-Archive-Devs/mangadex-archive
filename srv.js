@@ -305,7 +305,7 @@ function checkManga(manga, archiveWorkerResult)
                     return;
                 }
 
-                let statusCompleted = mangaInfo.manga.status === "completed";
+                let statusCompleted = mangaInfo.manga.status === "completed" || mangaInfo.manga.status === "canceled";
                 let lastUpload = -1;
                 let hasEndTag = false;
                 let volumeLow = Infinity;

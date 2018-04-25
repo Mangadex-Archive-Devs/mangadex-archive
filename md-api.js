@@ -6,7 +6,9 @@ const dom = require('cheerio');
 const stati = [
     'unknown',
     'ongoing',
-    'completed'
+    'completed',
+    'canceled',
+    'hiatus'
 ];
 const sort = (a, b) => (
     !isNaN(a.volume)
