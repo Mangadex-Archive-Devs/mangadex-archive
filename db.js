@@ -45,6 +45,17 @@ method.ready = function (cb)
     });
 };
 
+method.getArchivedList = function (callback) {
+    this._db.all("SELECT * FROM archived", (err, rows) => {
+        if (err) {
+            console.error("Failed to read from db");
+            notify.err("Failed to read from db! "+err.toString());
+            process.exit(1);
+        }
+        callback(rows);
+    });
+};
+
 method.isArchived = function (mangaId) {
     return this._archivedEntries.indexOf(mangaId) !== -1;
 };

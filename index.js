@@ -22,6 +22,9 @@ app.command('single <manga_id>')
     .option('--stats', 'Write stats to the db')
     .action(srv.single);
 
+app.command('dump_archived')
+    .action(srv.cachefile);
+
 app.command('stringtest')
     .action(srv.stringtest);
 

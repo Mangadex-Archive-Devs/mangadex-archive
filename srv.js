@@ -671,6 +671,29 @@ const stringtest = function(cmd) {
     console.log(a.stripJunk(s));
 };
 
+const cachefile = function (cmd) {
+
+    process.flags = {
+        db: cmd.db,
+        upload: cmd.upload,
+        images: cmd.images,
+        stats: cmd.stats || false
+    };
+
+    db.ready(() => {
+        try {
+            db.getArchivedList((list) => {
+                //list.timestamp = Date.now();
+                console.log(list);
+                fs.writeFileSync(path.join(__dirname, "archived.json"), JSON.stringify(list, null, 4));
+            });
+        } catch (err) {
+            notify.err("APPCRASH! "+err.toString(), (new Error()).stack);
+        }
+    });
+
+};
+
 const run = function(pageStart = 1) {
 
     let delay = (process.env.SCRAPE_INTERVAL_SECONDS || 15 * 60);
@@ -689,4 +712,4 @@ const run = function(pageStart = 1) {
 
 };
 
-module.exports = { boot, single, stringtest };
+module.exports = { boot, single, cachefile, stringtest };

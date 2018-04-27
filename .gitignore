@@ -63,6 +63,7 @@ runnerConfig.yml
 
 # Database
 manga.db*
+archived.json
 
 # Logfiles
 *.log
