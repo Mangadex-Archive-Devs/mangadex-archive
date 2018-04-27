@@ -1,5 +1,6 @@
 const util = require('util');
 const fs = require('fs');
+const archiver = require('archiver');
 const path = require('path');
 const RateLimiter = require('limiter').RateLimiter;
 const limiter = new RateLimiter(1, 1600); // x requests every y ms
@@ -199,6 +200,79 @@ function clearQueues()
     torrentUploadQueue = [];
 }
 
+function compressTorrent(torrentInfo, success, err)
+{
+    try {
+
+        let dirList = fs.readdirSync(torrentInfo.mangaPath);
+        let cursor = 0;
+
+        let compressOne = function(dirEntry) {
+            if (dirEntry == null) {
+                success();
+            }
+            else if (dirEntry === 'info.txt') {
+                compressOne(dirList[++cursor]);
+            } else {
+                let zipPath = path.join(torrentInfo.mangaPath, dirEntry) + '.zip';
+                //console.log("zip path: "+zipPath);
+
+                let output = fs.createWriteStream(zipPath);
+                let archive = archiver('zip', {
+                    zlib: {
+                        level: 0
+                    }
+                });
+
+                output.on('close', () => {
+                    compressOne(dirList[++cursor]);
+                    console.log("Cleaning up "+dirEntry+"...");
+                    try {
+                        fs.readdirSync(path.join(torrentInfo.mangaPath, dirEntry)).forEach((entry, i, all) => {
+                            let fpath = path.join(torrentInfo.mangaPath, dirEntry, entry);
+                            //console.log("Unlinking "+fpath);
+                            fs.unlinkSync(fpath);
+                        });
+                        let dpath = path.join(torrentInfo.mangaPath, dirEntry);
+                        //console.log("Rmdir "+dpath);
+                        fs.rmdirSync(dpath);
+                    } catch (error) {
+                        console.log("Error: failed to clean up directories!", error);
+                        err();
+                    }
+                });
+                output.on('end', () => {
+                    console.log("Data has been drained");
+                });
+                archive.on('warning', (error) => {
+                    if (error.code === 'ENOENT') {
+                        console.warn("ENOENT warning");
+                    } else {
+                        console.error("zip archive error:", error);
+                        err();
+                    }
+                });
+                archive.on('error', (error) => {
+                    console.error("zip archive error:", error);
+                    err();
+                });
+                archive.on('entry', (entryData) => {
+                    //console.log("Entry added: "+entryData.name);
+                });
+                fs.readdirSync(path.join(torrentInfo.mangaPath, dirEntry)).forEach((entry, i, all) => {
+                    archive.file(path.join(torrentInfo.mangaPath, dirEntry, entry), { name: entry });
+                });
+                archive.pipe(output);
+                archive.finalize();
+            }
+
+        };
+        compressOne(dirList[0]);
+    } catch (ex) {
+        err();
+    }
+}
+
 function processTorrentCreationQueue(finishedCb)
 {
     if (process.flags.images && torrentCreationQueue.length > 0) {
@@ -208,32 +282,37 @@ function processTorrentCreationQueue(finishedCb)
             if (torrentInfo == null)
                 finishedCb();
             else {
-                TorrentCreate.generateTorrent(
-                    {
-                        torrent_name: torrentInfo.mangaTitle,
-                        source_directory: torrentInfo.mangaPath,
-                        manga_id: torrentInfo.mangaId,
-                        torrent_file_path: torrentInfo.torrentPath,    //Where the .torrent-file should be saved
+                console.log("Compressing torrent...");
+                compressTorrent(torrentInfo, () => {
 
-                    }, (err) => {
-                        if (err) {
-                            console.error("Failed to create torrent: " + err.message + ", " + (err.error ? err.error.toString() : ""));
-                            notify.err("Failed to create torrent: "+err.message+", "+(err.error ? err.error.toString() : ""));
-                        } else {
-                            console.log("Torrent file created at "+torrentInfo.torrentPath);
-                            let uploadInfo = {
-                                mangaId: torrentInfo.mangaId,
-                                mangaTitle: torrentInfo.mangaTitle,
-                                title: torrentInfo.mangaTitle,
-                                description: "TODO",
-                                torrent: torrentInfo.torrentPath
-                            };
-                            torrentUploadQueue.push(uploadInfo);
+                    TorrentCreate.generateTorrent(
+                        {
+                            torrent_name: torrentInfo.mangaTitle,
+                            source_directory: torrentInfo.mangaPath,
+                            manga_id: torrentInfo.mangaId,
+                            torrent_file_path: torrentInfo.torrentPath,    //Where the .torrent-file should be saved
+
+                        }, (err) => {
+                            if (err) {
+                                console.error("Failed to create torrent: " + err.message + ", " + (err.error ? err.error.toString() : ""));
+                                notify.err("Failed to create torrent: "+err.message+", "+(err.error ? err.error.toString() : ""));
+                            } else {
+                                console.log("Torrent file created at "+torrentInfo.torrentPath);
+                                let uploadInfo = {
+                                    mangaId: torrentInfo.mangaId,
+                                    mangaTitle: torrentInfo.mangaTitle,
+                                    title: torrentInfo.mangaTitle,
+                                    description: "TODO",
+                                    torrent: torrentInfo.torrentPath
+                                };
+                                torrentUploadQueue.push(uploadInfo);
+                            }
+                            index++;
+                            fn(torrentCreationQueue[index], index); // Next
                         }
-                        index++;
-                        fn(torrentCreationQueue[index], index); // Next
-                    }
-                )
+                    )
+
+                }, finishedCb);
             }
         };
         fn(torrentCreationQueue[0], 0);
@@ -546,6 +625,41 @@ const single = function(mangaId, cmd)
 
 };
 
+const stringtest = function(cmd) {
+    let a = new ArchiveWorker();
+    let s = "When Keiichi Maebara moved to the small village of Hinamizawa, he did not expect to make friends so quickly. Now Keiichi's days are spent having fun and playing games with his new companions, and his life couldn't be better. However, one day he sees one of his friends, the tomboyish Mion Sonozaki, working at a maid café. Deciding to tease her about it, his initial joking quickly turns to shock as the girl reveals that she is actually Mion's twin sister, Shion.\n" +
+        "\n" +
+        "As luck would have it, both girls want to spend the annual Cotton Drifting Festival by Keiichi's side. But when Shion breaks the town's sacred rules and sneaks into a sealed shrine during the festival, dragging Keiichi along with her, things take a turn for the worse. Now, Keiichi and Shion find themselves in fear of being spirited away due to their mistake and must find a way to atone before it is too late.\n" +
+        "\n" +
+        "The story of Higurashi no Naku Koro ni is divided into a total of eight chapters: four \"Question\" arcs and four \"Answer\" arcs. Each chapter keeps the same main characters, but ends in a different way. However, each chapter gives valuable answers, hints, and clues to the previous one, while at the same time bringing forth even more mysteries.\n" +
+        "\n" +
+        "The question arcs are:\n" +
+        "\n" +
+        "[*]1. [url=https://mangadex.com/manga/8975]Higurashi no Naku Koro ni - Onikakushi-hen[/url]\n" +
+        "[*]2. [url=https://mangadex.com/manga/2523]Higurashi no Naku Koro ni - Watanagashi-hen[/url]\n" +
+        "[*]3. [url=https://mangadex.com/manga/2524]Higurashi no Naku Koro ni - Tatarigoroshi-hen[/url]\n" +
+        "[*]4. [url=https://mangadex.com/manga/2525]Higurashi no Naku Koro ni - Himatsubushi-hen[/url]\n" +
+        "\n" +
+        "The answer arcs are:\n" +
+        "\n" +
+        "[*]5. [url=https://mangadex.com/manga/2539]Higurashi no Naku Koro ni Kai - Meakashi-hen[/url]\n" +
+        "[*]6. [url=https://mangadex.com/manga/2540]Higurashi no Naku Koro ni Kai - Tsumihoroboshi-hen[/url]\n" +
+        "[*]7. [url=https://mangadex.com/manga/2582]Higurashi no Naku Koro ni Kai - Minagoroshi-hen[/url]\n" +
+        "[*]8. [url=https://mangadex.com/manga/2602]Higurashi no Naku Koro ni Kai - Matsuribayashi-hen[/url]\n" +
+        "\n" +
+        "The side story arcs are:\n" +
+        "\n" +
+        "[*][url=https://mangadex.com/manga/2607]Higurashi no Naku Koro ni - Onisarashi-hen[/url]\n" +
+        "[*][url=https://mangadex.com/manga/2622]Higurashi no Naku Koro ni - Yoigoshi-hen[/url]\n" +
+        "[*][url=https://mangadex.com/manga/2616]Higurashi no Naku Koro ni Kai - Utsutsukowashi-hen[/url]\n" +
+        "[*][url=https://mangadex.com/manga/2771]Higurashi no Naku Koro ni - Hirukowashi-hen[/url]\n" +
+        "[*][url=https://mangadex.com/manga/19298]Higurashi no Naku Koro ni - Kokoroiyashi-hen[/url]\n" +
+        "[*][url=https://mangadex.com/manga/2773]Higurashi no Naku Koro ni - Kataribanashi-hen[/url]\n" +
+        "[*][url=https://mangadex.com/manga/23402]Higurashi no Naku Koro ni Rei - Saikoroshi-hen[/url]\n" +
+        "[*][url=https://mangadex.com/manga/2772]Higurashi no Naku Koro ni Jan[/url]";
+    console.log(a.stripJunk(s));
+};
+
 const run = function(pageStart = 1) {
 
     let delay = (process.env.SCRAPE_INTERVAL_SECONDS || 15 * 60);
@@ -564,4 +678,4 @@ const run = function(pageStart = 1) {
 
 };
 
-module.exports = { boot, single };
+module.exports = { boot, single, stringtest };

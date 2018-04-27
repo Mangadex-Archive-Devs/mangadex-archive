@@ -122,11 +122,12 @@ method.addInfoFile = function ()
 method.stripJunk = function (string) {
     // Strip useless shit
     return string
-        .replace(/\[url=([^\s\]]+)\s*\](.*(?=\[\/url\]))\[\/url\]/g, '$1')
-        .replace(/\[\/?(?:b|u|i|spoiler|list|url|\/\*)\]/i, '')
-        .replace(/<\/?[bui]>/i, '')
-        .replace(/<br\s*\/?>/i, "\n")
-        .replace(/\[\*\]/, '* ')
+        .replace(/\[url=([^\]]*)](.*?)\[\/url]/ig, '$2 ($1)')
+        //.replace(/\[url=([^\s\]]+?)\s*\](.*?(?=\[\/url\]))\[\/url\]/g, '$2 ($1)')
+        .replace(/\[\/?(?:b|u|i|spoiler|list|url|\/\*)\]/ig, '')
+        .replace(/<\/?[bui]>/ig, '')
+        .replace(/<br\s*\/?>/ig, "\n")
+        .replace(/\[\*\]/g, '* ')
         ;
 };
 

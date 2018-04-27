@@ -4,6 +4,7 @@
   "description": "a bot that fetches completed manga from mangadex and uploads them as a torrent to anidex",
   "main": "index.js",
   "dependencies": {
+    "archiver": "^2.1.1",
     "cheerio": "^1.0.0-rc.2",
     "commander": "^2.15.1",
     "dotenv": "^5.0.1",

@@ -22,4 +22,7 @@ app.command('single <manga_id>')
     .option('--stats', 'Write stats to the db')
     .action(srv.single);
 
+app.command('stringtest')
+    .action(srv.stringtest);
+
 app.parse(process.argv);
