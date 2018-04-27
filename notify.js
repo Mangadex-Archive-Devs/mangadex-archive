@@ -41,6 +41,7 @@ const webHook = {
     info: process.env.DISCORD_WEBHOOK_INFO || null,
     warning: process.env.DISCORD_WEBHOOK_WARNING || null,
     error: process.env.DISCORD_WEBHOOK_ERROR || null,
+    announce: process.env.DISCORD_WEBHOOK_ANNOUNCE || null,
 };
 
 module.exports = {
@@ -48,6 +49,12 @@ module.exports = {
     info: function (message, trace = null) {
         limiter.removeTokens(1, () => {
             sendMsg(message, webHook.info, 0xd3eeef, trace);
+        })
+    },
+
+    announce: function (message, trace = null) {
+        limiter.removeTokens(1, () => {
+            sendMsg(message, webHook.announce, 0x1cff38, trace);
         })
     },
 

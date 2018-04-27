@@ -3,7 +3,8 @@ const fs = require('fs');
 const archiver = require('archiver');
 const path = require('path');
 const RateLimiter = require('limiter').RateLimiter;
-const limiter = new RateLimiter(1, 1600); // x requests every y ms
+const limiter = new RateLimiter(1, 2000); // x requests every y ms
+const uploadLimiter = new RateLimiter(1, 60 * 1000); // x requests every y ms
 const request = require('request');
 const moment = require('moment');
 const dom = require('cheerio');
@@ -28,11 +29,18 @@ let _isStopRequested = false;
 
 function nextPage(page, allPagesDoneCb)
 {
-    let delay = 5;
-    console.log("nextPage("+page+") in "+delay+" seconds...");
-    setTimeout(() => {
-        scrapeMangaList(page, allPagesDoneCb)
-    }, delay * 1000);
+    if (fs.existsSync('stop')) {
+        let delay = 10;
+        console.log("Stop requested. Terminating on page "+(page-1)+" in "+delay+" seconds...");
+        fs.unlink('stop');
+        setTimeout(() => process.exit(0), delay * 1000);
+    } else {
+        let delay = 120;
+        console.log("nextPage("+page+") in "+delay+" seconds...");
+        setTimeout(() => {
+            scrapeMangaList(page, allPagesDoneCb)
+        }, delay * 1000);
+    }
 }
 
 function scrapeMangaList(page = 1, allPagesDoneCb)
@@ -190,6 +198,7 @@ function enqueueTorrentCreation(archiveWorker)
         mangaTitle: archiveWorker.getMangaName(),
         mangaPath: archiveWorker.getAbsolutePath(),
         torrentPath: path.join(process.env.BASE_DIR, 'torrents', archiveWorker.getMangaId()+"-"+archiveWorker.getMangaName()+".torrent"),
+        mangaInfo: archiveWorker.getTorrentInfo(),
     };
     torrentCreationQueue.push(torrentInfo);
 }
@@ -226,7 +235,7 @@ function compressTorrent(torrentInfo, success, err)
 
                 output.on('close', () => {
                     compressOne(dirList[++cursor]);
-                    console.log("Cleaning up "+dirEntry+"...");
+                    //console.log("Cleaning up "+dirEntry+"...");
                     try {
                         fs.readdirSync(path.join(torrentInfo.mangaPath, dirEntry)).forEach((entry, i, all) => {
                             let fpath = path.join(torrentInfo.mangaPath, dirEntry, entry);
@@ -302,7 +311,7 @@ function processTorrentCreationQueue(finishedCb)
                                     mangaId: torrentInfo.mangaId,
                                     mangaTitle: torrentInfo.mangaTitle,
                                     title: torrentInfo.mangaTitle,
-                                    description: "TODO",
+                                    description: torrentInfo.mangaInfo,
                                     torrent: torrentInfo.torrentPath
                                 };
                                 torrentUploadQueue.push(uploadInfo);
@@ -339,24 +348,26 @@ function processTorrentUploadQueue(finishedCb)
                     anidex_private: process.env.ANIDEX_PRIVATE || 0,
                     anidex_debug: process.env.ANIDEX_DEBUG || (process.flags.upload ? 0 : 1)
                 };
-                TorrentCreate.postTorrent(
-                    payload, (result) => {
-                        if (result == null) {
-                            console.error("Failed to upload torrent " + uploadInfo.torrent + "!");
-                            notify.err("Failed to upload torrent " + uploadInfo.torrent);
-                        } else if (result > 0) {
-                            console.log("Successfully uploaded torrent for manga " + uploadInfo.mangaTitle + ", torrentId = " + result);
-                            db.setArchived(uploadInfo.mangaId, result, true);
-                            console.log("Manga " + uploadInfo.mangaId + " set to archived = true");
-                            notify.warn("New Manga archived: " + uploadInfo.mangaTitle + " at https://mangadex.org/manga/" + uploadInfo.mangaId + " on anidex: https://anidex.info/torrent/" + result);
-                        } else {
-                            console.log("Successfully uploaded torrent, but torrentId was invalid. This probably means, it was a test upload.");
-                            notify.warn("New Manga (TEST) archived: " + uploadInfo.mangaTitle + " at https://mangadex.org/manga/" + uploadInfo.mangaId + " on anidex: https://anidex.info/torrent/" + result);
+                uploadLimiter.removeTokens(1, () => {
+                    TorrentCreate.postTorrent(
+                        payload, (result) => {
+                            if (result == null) {
+                                console.error("Failed to upload torrent " + uploadInfo.torrent + "!");
+                                notify.err("Failed to upload torrent " + uploadInfo.torrent);
+                            } else if (result > 0) {
+                                console.log("Successfully uploaded torrent for manga " + uploadInfo.mangaTitle + ", torrentId = " + result);
+                                db.setArchived(uploadInfo.mangaId, result, true);
+                                //console.log("Manga " + uploadInfo.mangaId + " set to archived = true");
+                                notify.announce("New Manga archived: " + uploadInfo.mangaTitle + " at https://mangadex.org/manga/" + uploadInfo.mangaId + " on anidex: https://anidex.info/torrent/" + result);
+                            } else {
+                                console.log("Successfully uploaded torrent, but torrentId was invalid. This probably means, it was a test upload.");
+                                notify.announce("New Manga (TEST) archived: " + uploadInfo.mangaTitle + " at https://mangadex.org/manga/" + uploadInfo.mangaId + " on anidex: https://anidex.info/torrent/" + result);
+                            }
+                            index++;
+                            fn(torrentUploadQueue[index], index); // Next
                         }
-                        index++;
-                        fn(torrentUploadQueue[index], index); // Next
-                    }
-                )
+                    )
+                });
             }
         };
         fn(torrentUploadQueue[0], 0);

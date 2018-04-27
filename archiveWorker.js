@@ -6,7 +6,7 @@ const sanitize = require("sanitize-filename");
 const events = require('events');
 const request = require('request');
 const RateLimiter = require('limiter').RateLimiter;
-const imageLimiter = new RateLimiter(1, 500); // x requests every y ms
+const imageLimiter = new RateLimiter(1, 1000); // x requests every y ms
 const notify = require('./notify');
 
 var method = ArchiveWorker.prototype;
@@ -19,6 +19,7 @@ function ArchiveWorker(mangaInfo, limiter, callback) {
     this._chapters = [];
     this._promiseWorkers = [];
     this._dirname = null;
+    this._infoRaw = "";
 
 }
 
@@ -51,6 +52,10 @@ method.getChapterDirname = function (chapter)
 
     //console.log("getChapterDirname", this._manga);
     return sanitize(util.format("%s - c%s (v%s) %s", this._manga.title, chapterString, volumeString, groupString)).toString().replace(/^\.+/, "");
+};
+
+method.getTorrentInfo = function () {
+    return this._infoRaw;
 };
 
 method.getAbsolutePath = function () {
@@ -106,7 +111,8 @@ method.addInfoFile = function ()
 
     let groupListString = groupList.map(g => "- "+g.trim().replace(/,\s*/i, '')).join("\n");
 
-    let infoRaw = fs.readFileSync('info.template.txt', 'utf8')
+    let infoRaw = fs.readFileSync('info.template.txt', 'utf8');
+    let infoFile = infoRaw
         .replace(/{id}/i, this._manga.id)
         .replace(/{title}/i, this._manga.title)
         .replace(/{url}/i, "https://mangadex.info/manga/"+this._manga.id)
@@ -116,7 +122,17 @@ method.addInfoFile = function ()
         .replace(/{chapterlist}/i, chapterList.trim())
         .replace(/{grouplist}/i, groupListString)
     ;
-    fs.writeFileSync(destinationPath, infoRaw, {encoding: 'utf8'});
+    this._infoRaw = infoRaw
+        .replace(/{id}/i, this._manga.id)
+        .replace(/{title}/i, this._manga.title)
+        .replace(/{url}/i, "https://mangadex.info/manga/"+this._manga.id)
+        .replace(/{description}/i, this.getMangaDescription())
+        .replace(/{date}/i, moment(Date.now()).format('MMMM Do YYYY, h:mm:ss a'))
+        .replace(/{version}/i, global.thisVersion)
+        .replace(/{chapterlist}/i, this._chapters.length+" Chapters")
+        .replace(/{grouplist}/i, groupListString)
+    ;
+    fs.writeFileSync(destinationPath, infoFile, {encoding: 'utf8'});
 };
 
 method.stripJunk = function (string) {
