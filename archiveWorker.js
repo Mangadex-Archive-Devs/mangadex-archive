@@ -112,24 +112,25 @@ method.addInfoFile = function ()
     let groupListString = groupList.map(g => "- "+g.trim().replace(/,\s*/i, '')).join("\n");
 
     let infoRaw = fs.readFileSync('info.template.txt', 'utf8');
+    let descrRaw = fs.readFileSync('description.template.txt', 'utf8');
     let infoFile = infoRaw
         .replace(/{id}/i, this._manga.id)
         .replace(/{title}/i, this._manga.title)
-        .replace(/{url}/i, "https://mangadex.info/manga/"+this._manga.id)
+        .replace(/{url}/i, "https://mangadex.org/manga/"+this._manga.id)
         .replace(/{description}/i, this.getMangaDescription())
         .replace(/{date}/i, moment(Date.now()).format('MMMM Do YYYY, h:mm:ss a'))
         .replace(/{version}/i, global.thisVersion)
         .replace(/{chapterlist}/i, chapterList.trim())
         .replace(/{grouplist}/i, groupListString)
     ;
-    this._infoRaw = infoRaw
+    this._infoRaw = descrRaw
         .replace(/{id}/i, this._manga.id)
         .replace(/{title}/i, this._manga.title)
-        .replace(/{url}/i, "https://mangadex.info/manga/"+this._manga.id)
+        .replace(/{url}/i, "https://mangadex.org/manga/"+this._manga.id)
         .replace(/{description}/i, this.getMangaDescription())
         .replace(/{date}/i, moment(Date.now()).format('MMMM Do YYYY, h:mm:ss a'))
         .replace(/{version}/i, global.thisVersion)
-        .replace(/{chapterlist}/i, this._chapters.length+" Chapters")
+        .replace(/{chapternum}/i, this._chapters.length)
         .replace(/{grouplist}/i, groupListString)
     ;
     fs.writeFileSync(destinationPath, infoFile, {encoding: 'utf8'});
@@ -183,39 +184,56 @@ method.addChapter = function (chapter)
                 continue;
             }
 
+            let picNum = i+1;
+            let picTotal = chapter.pages.length;
+
             imageWorkers.push(new Promise((resolve, reject) => {
 
                 imageLimiter.removeTokens(1, () => {
 
-                    let imgUrl = chapter.url.toString() + page;
+                    try {
+                        let imgUrl = chapter.url.toString() + page;
 
-                    request.get({
-                        url: imgUrl,
-                        timeout: (process.env.REQUEST_TIMEOUT || 5) * 1000
-                    }).on('response', (res) => {
-                        if (res.statusCode !== 200) {
-                            reject("Failed to download "+imgUrl+", statusCode: "+res.statusCode);
-                        } else {
-                            console.info("Downloading "+imgUrl);
+                        request.get({
+                            url: imgUrl,
+                            timeout: (process.env.REQUEST_TIMEOUT || 5) * 1000
+                        }).on('response', (res) => {
+                            if (res.statusCode !== 200) {
+                                reject("Failed to download "+imgUrl+", statusCode: "+res.statusCode);
+                            } else {
+                                console.info("DL ("+picNum+"/"+picTotal+") "+imgUrl);
 
-                            res.pipe(fs.createWriteStream(destinationPath));
-                            res.on('end', resolve);
-                        }
-                    }).on('error', (err) => {
-                        console.error("Failed to download image from "+imgUrl, err);
-                        reject("Failed to download image from "+imgUrl);
-                    });
+                                res.pipe(fs.createWriteStream(destinationPath));
+                                res.on('end', resolve);
+                            }
+                        }).on('error', (err) => {
+                            console.error("Failed to download image from "+imgUrl, err);
+                            reject("Failed to download image from "+imgUrl);
+                        }).on('close', () => {
+                            console.log("Image download stream closed");
+                        }).on('abort', () => {
+                            console.log("Image download aborted");
+                            reject();
+                        }).on('drain', () => {
+                            console.log("Image download socket drained");
+                        }).on('timeout', () => {
+                            console.log("Image download timeout reached");
+                            reject();
+                        });
+                    } catch (err) {
+                        console.error("Image download threw unhandled exception", err);
+                        reject();
+                    }
+
                 });
             }));
         }
-        Promise.all(imageWorkers).then(resolve).catch((reason) => {
-            console.error("Imageworker threw an exception: "+reason);
-            notify.err("Imageworker threw an exception: "+(reason ? reason.toString() : "no reason"));
-            reject();
-        }).catch((err) => {
-            console.error("Image worker promise error", err);
-            reject();
-        });
+        Promise.all(imageWorkers).then(resolve)
+            .catch((reason) => {
+                console.error("Imageworker threw an exception: "+reason);
+                notify.err("Imageworker threw an exception: "+(reason ? reason.toString() : "no reason"));
+                reject();
+            });
     });
     self._promiseWorkers.push(promiseWorker);
 
@@ -233,7 +251,7 @@ method.addChapter = function (chapter)
 
         }).catch((reason) => {
 
-            console.error(util.format("Archive Worker failed while trying to download chapter. Reason: %s", reason.toString()));
+            console.error(util.format("Archive Worker failed while trying to download chapter. Reason: %s", reason ? reason.toString() : "no reason"));
             notify.err("Archive worker failed while trying to download chapter. Reason: "+(reason ? reason.toString() : "no reason"));
             throw new Error();
 

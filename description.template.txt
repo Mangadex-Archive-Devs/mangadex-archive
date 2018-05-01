@@ -1,0 +1,29 @@
+MANGADEX.ORG ARCHIVE
+
+==== MANGA INFO ====
+
+- Id: {id}
+- Title: {title}
+- Url: {url}
+- Chapters: {chapternum}
+
+==== MANGA DESCRIPTION ====
+
+{description}
+
+==== GROUP LIST ====
+
+{grouplist}
+
+==== ARCHIVE INFO ====
+
+- Date Archived: {date}
+- Archiver version: {version}
+- Tracker: https://anidex.info
+- Profile: https://anidex.info/user/12705
+
+THE MANGADEX-ARCHIVER AUTOMATICALLY CREATES TORRENTS OF MANGA THAT ARE FLAGGED AS COMPLETED.
+
+IF THIS TORRENT CONTAINS INCOMPLETE VOLUMES, CHAPTERS OR IMAGE FILES, PLEASE SEND A MESSAGE TO THE USER PROFILE LINKED
+ABOVE OR CONTACT THE MAINTAINER IN THE MANGADEX DISCORD.
+

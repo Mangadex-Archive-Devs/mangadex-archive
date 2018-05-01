@@ -35,7 +35,7 @@ function nextPage(page, allPagesDoneCb)
         fs.unlink('stop');
         setTimeout(() => process.exit(0), delay * 1000);
     } else {
-        let delay = 120;
+        let delay = 10;
         console.log("nextPage("+page+") in "+delay+" seconds...");
         setTimeout(() => {
             scrapeMangaList(page, allPagesDoneCb)
@@ -214,6 +214,19 @@ function compressTorrent(torrentInfo, success, err)
     try {
 
         let dirList = fs.readdirSync(torrentInfo.mangaPath);
+
+        // Kill all existing zip files
+        let rx = /\.zip$/i;
+        let needsRescan = false;
+        dirList.forEach((entry, i, all) => {
+            if (rx.test(entry)) {
+                fs.unlinkSync(path.join(torrentInfo.mangaPath, entry));
+                needsRescan = true;
+            }
+        });
+        if (needsRescan)
+            dirList = fs.readdirSync(torrentInfo.mangaPath);
+
         let cursor = 0;
 
         let compressOne = function(dirEntry) {
@@ -464,7 +477,7 @@ function checkManga(manga, archiveWorkerResult)
                 let condition =
                     hasEndTag
                     && lastUpload > 0
-                    && Math.abs(moment(lastUpload).diff(Date.now(), 'days')) > 7
+                    && Math.abs(moment(lastUpload).diff(Date.now(), 'days')) > 15
                     && statusCompleted
                     && chapterGapCount < 1
                     && chapterLow <= 1;
@@ -517,16 +530,22 @@ function checkManga(manga, archiveWorkerResult)
                         limiter.removeTokens(1, () => {
                             getChapter(chapter.id).then((chapterInfo) => {
 
-                                if (chapterInfo) { // chapterInfo is null when the parser failed
-                                    worker.addChapter({
-                                        id: chapter.id,
-                                        title: chapter.title,
-                                        vol: chapter.vol,
-                                        ch: chapter.ch,
-                                        groups: chapter.groups,
-                                        url: chapterInfo.dataurl,
-                                        pages: chapterInfo.pages
-                                    });
+                                try {
+                                    if (chapterInfo) { // chapterInfo is null when the parser failed
+                                        worker.addChapter({
+                                            id: chapter.id,
+                                            title: chapter.title,
+                                            vol: chapter.vol,
+                                            ch: chapter.ch,
+                                            groups: chapter.groups,
+                                            url: chapterInfo.dataurl,
+                                            pages: chapterInfo.pages
+                                        });
+                                    }
+                                } catch (err) {
+                                    console.error(err);
+                                    //notify.err(err);
+                                    archiveWorkerResult(null);
                                 }
 
                             }).catch((err) => {
@@ -543,13 +562,13 @@ function checkManga(manga, archiveWorkerResult)
 
             } catch (err) {
                 // Any reson for not archieving this was given. // FIXME
-                console.error("Error while checking manga "+manga.id+": "+err.toString());
-                notify.err("Error while checking manga "+manga.id+": "+err.toString());
+                console.error("Error while checking manga "+manga.id, err);
+                notify.err("Error while checking manga "+manga.id);
                 archiveWorkerResult(null);
             }
         }).catch((err) => {
-            console.error("Error while checking manga "+manga.id+": "+err.toString());
-            notify.err("Error while checking manga "+manga.id+": "+err.toString());
+            console.error("Error while checking manga "+manga.id, err);
+            notify.err("Error while checking manga "+manga.id);
             archiveWorkerResult(null);
         });
     });

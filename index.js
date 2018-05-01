@@ -2,7 +2,7 @@ require('dotenv').config();
 const app = require('commander');
 const srv = require('./srv');
 
-const version = '0.20.0';
+const version = '0.21.0';
 
 global.thisVersion = version;
 
