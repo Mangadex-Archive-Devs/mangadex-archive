@@ -11,11 +11,12 @@ const notify = require('./notify');
 
 var method = ArchiveWorker.prototype;
 
-function ArchiveWorker(mangaInfo, limiter, callback) {
+function ArchiveWorker(mangaInfo, limiter, callback, errcallback) {
 
     this._manga = mangaInfo;
     this._limiter = limiter;
     this._callback = callback; // function (archiveWorker)
+    this._errcallback = errcallback;
     this._chapters = [];
     this._promiseWorkers = [];
     this._dirname = null;
@@ -197,6 +198,11 @@ method.addChapter = function (chapter)
                         request.get({
                             url: imgUrl,
                             timeout: (process.env.REQUEST_TIMEOUT || 5) * 1000
+                        }, (err, res, body) => {
+                            if (err) {
+                                console.error(err);
+                                reject("Failed to download "+imgUrl+", statusCode: "+res.statusCode);
+                            }
                         }).on('response', (res) => {
                             if (res.statusCode !== 200) {
                                 reject("Failed to download "+imgUrl+", statusCode: "+res.statusCode);
@@ -210,7 +216,7 @@ method.addChapter = function (chapter)
                             console.error("Failed to download image from "+imgUrl, err);
                             reject("Failed to download image from "+imgUrl);
                         }).on('close', () => {
-                            console.log("Image download stream closed");
+                            // console.log("Image download stream closed");
                         }).on('abort', () => {
                             console.log("Image download aborted");
                             reject();
@@ -253,7 +259,8 @@ method.addChapter = function (chapter)
 
             console.error(util.format("Archive Worker failed while trying to download chapter. Reason: %s", reason ? reason.toString() : "no reason"));
             notify.err("Archive worker failed while trying to download chapter. Reason: "+(reason ? reason.toString() : "no reason"));
-            throw new Error();
+            //throw new Error();
+            self._errcallback();
 
         });
     }

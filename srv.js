@@ -410,7 +410,8 @@ function checkManga(manga, archiveWorkerResult)
 
                 let statusCompleted = mangaInfo.manga.status === "completed" || mangaInfo.manga.status === "canceled";
                 let lastUpload = -1;
-                let hasEndTag = false;
+                let hasTextEndTag = false;
+                let hasEndLabel = false;
                 let volumeLow = Infinity;
                 let volumeHigh = 0;
                 let chapterLow = Infinity;
@@ -432,7 +433,7 @@ function checkManga(manga, archiveWorkerResult)
 
                     //console.log(chap);
                     let rx = /\[end\]/i;
-                    hasEndTag = hasEndTag || rx.test(ch.ctitle);
+                    hasTextEndTag = hasTextEndTag || rx.test(ch.ctitle);
                     if (ch.timestamp > lastUpload)
                         lastUpload = ch.timestamp;
                     // Update ch/vol numbers
@@ -440,6 +441,8 @@ function checkManga(manga, archiveWorkerResult)
                     chapterLow = Math.min(chapterLow, ch.ch);
                     volumeHigh = Math.max(volumeHigh, ch.vol);
                     chapterHigh = Math.max(chapterHigh, ch.ch);
+
+                    hasEndLabel = hasEndLabel || (mangaInfo.manga.last_chapter > 0 && mangaInfo.manga.last_chapter.toString() === ch.ch.toString());
 
                     let groups = ch.groups.map(group => entities.decode(group.group).toString().trim());
 
@@ -472,24 +475,30 @@ function checkManga(manga, archiveWorkerResult)
                 if (!chapterIds[0]) // Ch.00 doesnt count as a gap, because we dont know if the manga is supposed to have one.
                     chapterGapCount = Math.max(0, chapterGapCount - 1);
 
-                //console.log("StatusCompleted = "+statusCompleted+", lastUpload = "+lastUpload+" ("+Math.abs(moment(lastUpload).diff(Date.now(), 'days'))+" days), hasEndTag = "+hasEndTag+" gapCount = "+chapterGapCount+", startsAtCh = "+chapterLow);
-                //console.dir(mangaInfo, {depth:Infinity,color:true});
+                console.log("ID: #"+manga.id+", status="+statusCompleted+", lastUpload="+lastUpload+" ("+Math.abs(moment(lastUpload).diff(Date.now(), 'days'))+" days), hasTextEndTag="+hasTextEndTag+", hasEndLabel="+hasEndLabel+" gaps="+chapterGapCount+", startsAt="+chapterLow+", lastCh="+mangaInfo.manga.last_chapter+", chHigh="+chapterHigh+", eq="+(mangaInfo.manga.last_chapter.toString() === chapterHigh.toString()));
                 let condition =
-                    hasEndTag
+                    !hasTextEndTag // Pollutes the manga chapter name, so we exclude those
+                    && hasEndLabel
                     && lastUpload > 0
                     && Math.abs(moment(lastUpload).diff(Date.now(), 'days')) > 15
                     && statusCompleted
                     && chapterGapCount < 1
                     && chapterLow <= 1;
 
-                if (hasEndTag && !statusCompleted) {
+                if (hasTextEndTag) {
                     // Notify
-                    console.warn("Manga #"+manga.id+" "+manga.title+" has an [END] Tag, but is not set as completed.");
-                    notify.warn("Manga #"+manga.id+" "+manga.title+" has an [END] Tag, but is not set as completed. https://mangadex.org/manga/"+manga.id);
+                    console.warn("Manga #"+manga.id+" "+manga.title+" has an [END] Text Tag, which is deprecated.");
+                    notify.warn("Manga #"+manga.id+" "+manga.title+" has an [END] Text Tag, which is deprecated. https://mangadex.org/manga/"+manga.id);
+                }
+
+                if (hasEndLabel && !statusCompleted) {
+                    // Notify
+                    console.warn("Manga #"+manga.id+" "+manga.title+" has an End Label, but is not set as completed.");
+                    notify.warn("Manga #"+manga.id+" "+manga.title+" has an End Label, but is not set as completed. https://mangadex.org/manga/"+manga.id);
                 }
 
                 if (process.flags.stats) {
-                    db.addStats(manga.id, manga.title, volumeLow, volumeHigh-volumeLow+1, chapterLow, chapters.length, chapterGapCount, lastUpload, hasEndTag, statusCompleted ? "Completed" : "Ongoing", condition, mangaInfo.manga.description);
+                    db.addStats(manga.id, manga.title, volumeLow, volumeHigh-volumeLow+1, chapterLow, chapters.length, chapterGapCount, lastUpload, hasEndLabel, statusCompleted ? "Completed" : "Ongoing", condition, mangaInfo.manga.description);
                 }
 
                 if (condition) {
@@ -517,6 +526,9 @@ function checkManga(manga, archiveWorkerResult)
                     }, limiter, () => {
                         // Archive worker created
                         archiveWorkerResult(worker);
+                    }, () => {
+                        // Any error got thrown
+                        archiveWorkerResult(null);
                     });
                     //console.log("Created new archiveWorker for title "+manga.title);
 
@@ -563,12 +575,12 @@ function checkManga(manga, archiveWorkerResult)
             } catch (err) {
                 // Any reson for not archieving this was given. // FIXME
                 console.error("Error while checking manga "+manga.id, err);
-                notify.err("Error while checking manga "+manga.id);
+                notify.err("Error while checking manga "+manga.id+": "+(err || "no info available"));
                 archiveWorkerResult(null);
             }
         }).catch((err) => {
             console.error("Error while checking manga "+manga.id, err);
-            notify.err("Error while checking manga "+manga.id);
+            notify.err("Error while checking manga "+manga.id+": "+(err || "no info available"));
             archiveWorkerResult(null);
         });
     });
