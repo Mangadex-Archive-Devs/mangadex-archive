@@ -14,3 +14,9 @@ CREATE TABLE "stats" (
 	`description`	TEXT,
 	PRIMARY KEY(`mangaId`)
 );
+CREATE TABLE "directories" (
+	`mangaId`	INTEGER,
+	`mangaTitle`	TEXT,
+	`directory`	TEXT,
+	PRIMARY KEY(`mangaId`)
+);

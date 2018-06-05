@@ -22,6 +22,7 @@ function DbWrapper(dbFilename = 'manga.db') {
 method.ready = function (cb)
 {
     this._archivedEntries = [];
+    this._dirReservations = [];
 
     let loadDb = [
         new Promise((resolve, reject) => {
@@ -34,7 +35,19 @@ method.ready = function (cb)
                 this._archivedEntries = rows.map((e => e.mangaId));
                 resolve();
             });
+        }),
+        new Promise((resolve, reject) => {
+            this._db.all("SELECT * FROM directories", (err, rows) => {
+                if (err) {
+                    console.error("Failed to read from db");
+                    notify.err("Failed to read from db! "+err.toString());
+                    process.exit(1);
+                }
+                this._dirReservations = rows;
+                resolve();
+            });
         })
+
     ];
 
     Promise.all(loadDb).then(() => {
@@ -84,6 +97,27 @@ method.setArchived = function (mangaId, anidexId = 0, isArchived = true) {
             notify.err("SQL Error: "+e.toString());
         }
     }
+};
+
+method.getDirReservation = function (mangaId, mangaTitle, directory) {
+
+    for (let i = 0; i < this._dirReservations.length; i++) {
+        let entry = this._dirReservations[i];
+        if (directory === entry.directory) {
+            return entry;
+        }
+    }
+    let newEntry = {
+        mangaId: mangaId,
+        mangaTitle: mangaTitle,
+        directory: directory,
+    };
+    this._dirReservations.push(newEntry);
+    let stmt = this._db.prepare("INSERT INTO directories VALUES (?,?,?)");
+    stmt.run(
+        mangaId, mangaTitle, directory
+    );
+    return newEntry;
 };
 
 method.addStats = function (mangaId, mangaTitle, volStart, volCount, chStart, chCount, chGaps, lastUpload, hasEndTag, status, isArchiveable, description) {

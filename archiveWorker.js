@@ -11,8 +11,9 @@ const notify = require('./notify');
 
 var method = ArchiveWorker.prototype;
 
-function ArchiveWorker(mangaInfo, limiter, callback, errcallback) {
+function ArchiveWorker(db, mangaInfo, limiter, callback, errcallback) {
 
+    this._db = db;
     this._manga = mangaInfo;
     this._limiter = limiter;
     this._callback = callback; // function (archiveWorker)
@@ -21,6 +22,7 @@ function ArchiveWorker(mangaInfo, limiter, callback, errcallback) {
     this._promiseWorkers = [];
     this._dirname = null;
     this._infoRaw = "";
+    this._dirReservationFail = false;
 
 }
 
@@ -162,9 +164,34 @@ method.addChapter = function (chapter)
         // Create path & dirs
         self._dirname = path.join(process.env.BASE_DIR, self.getMangaDirname());
 
+        // Handle directory name collisions (ex: Clover #4113 and Clover #5772)
+        try {
+            let reservation = this._db.getDirReservation(this._manga.id, this._manga.title, self._dirname);
+            //console.log(this._manga.id, this._manga.title, self._dirname);
+            //console.log(reservation);
+            //console.log(this._dirReservationFail);
+            if (reservation.mangaId !== this._manga.id) {
+                // Collision! Append the mangaid so it gets unique again
+                self._dirname += " ("+this._manga.id+")";
+                if (!this._dirReservationFail) {
+                    console.log(`Dir reservation failure for manga #${this._manga.id} ${this._manga.title} trying to reserve directory ${self._dirname} which is already reserved by #${reservation.mangaId} ${reservation.mangaTitle}`);
+                    self._dirReservationFail = true;
+                    reservation = this._db.getDirReservation(this._manga.id, this._manga.title, self._dirname);
+                    notify.warn(`Directory collision due to manga with the same name. manga #${this._manga.id} ${this._manga.title} has been renamed to directory ${self._dirname}`);
+                    console.log("Updated directory reservation: ", reservation);
+                }
+            }
+        } catch (err) {
+            this._dirReservationFail = true;
+            notify.err("Exception during reservation db check: "+(err ? err : "undefined err"));
+            reject(`Dir reservation failure for manga #${this._manga.id} ${this._manga.title}, reject called in catch block with error ${err}`);
+            return;
+        }
+
         if (!fs.existsSync(self._dirname))
             fs.mkdirSync(self._dirname);
         let dirname = path.join(self._dirname, self.getChapterDirname(chapter));
+
         if (!fs.existsSync(dirname))
             fs.mkdirSync(dirname);
 
@@ -201,7 +228,7 @@ method.addChapter = function (chapter)
                         }, (err, res, body) => {
                             if (err) {
                                 console.error(err);
-                                reject("Failed to download "+imgUrl+", statusCode: "+res.statusCode);
+                                reject("Failed to download "+imgUrl+", statusCode: "+(res ? res.statusCode : "result undefined"));
                             }
                         }).on('response', (res) => {
                             if (res.statusCode !== 200) {
@@ -219,7 +246,7 @@ method.addChapter = function (chapter)
                             // console.log("Image download stream closed");
                         }).on('abort', () => {
                             console.log("Image download aborted");
-                            reject();
+                            //reject(); // The above error block already rejects the promise on ESOCKETTIMEDOUT
                         }).on('drain', () => {
                             console.log("Image download socket drained");
                         }).on('timeout', () => {
@@ -228,7 +255,7 @@ method.addChapter = function (chapter)
                         });
                     } catch (err) {
                         console.error("Image download threw unhandled exception", err);
-                        reject();
+                        reject("Unhandled Exception catch block inside imageworker with err: "+err);
                     }
 
                 });
@@ -236,10 +263,11 @@ method.addChapter = function (chapter)
         }
         Promise.all(imageWorkers).then(resolve)
             .catch((reason) => {
-                console.error("Imageworker threw an exception: "+reason);
-                notify.err("Imageworker threw an exception: "+(reason ? reason.toString() : "no reason"));
-                reject();
+                console.error("Imageworker threw an exception inside a catch block (this is recoverable): "+reason);
+                notify.err("Imageworker threw an exception inside a catch block (this is recoverable): "+(reason ? reason.toString() : "no reason"));
+                reject("error caught in a imageWorker: "+reason);
             });
+
     });
     self._promiseWorkers.push(promiseWorker);
 

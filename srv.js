@@ -32,7 +32,7 @@ function nextPage(page, allPagesDoneCb)
     if (fs.existsSync('stop')) {
         let delay = 10;
         console.log("Stop requested. Terminating on page "+(page-1)+" in "+delay+" seconds...");
-        fs.unlink('stop');
+        fs.unlinkSync('stop');
         setTimeout(() => process.exit(0), delay * 1000);
     } else {
         let delay = 10;
@@ -417,6 +417,7 @@ function checkManga(manga, archiveWorkerResult)
                 let chapterLow = Infinity;
                 let chapterHigh = 0;
                 let chapterGapCount = 0;
+                let allGroups = [];
 
                 //console.log(mangaInfo.chapter, mangaInfo.chapter.length);
                 let chapters = [];
@@ -445,6 +446,11 @@ function checkManga(manga, archiveWorkerResult)
                     hasEndLabel = hasEndLabel || (mangaInfo.manga.last_chapter > 0 && mangaInfo.manga.last_chapter.toString() === ch.ch.toString());
 
                     let groups = ch.groups.map(group => entities.decode(group.group).toString().trim());
+                    groups.forEach((entry, i, all) => {
+                        if (allGroups.indexOf(entry) === -1) {
+                            allGroups.push(entry);
+                        }
+                    });
 
                     let chapterInfo = {
                         id: ch.cid,
@@ -475,7 +481,7 @@ function checkManga(manga, archiveWorkerResult)
                 if (!chapterIds[0]) // Ch.00 doesnt count as a gap, because we dont know if the manga is supposed to have one.
                     chapterGapCount = Math.max(0, chapterGapCount - 1);
 
-                console.log("ID: #"+manga.id+", status="+statusCompleted+", lastUpload="+lastUpload+" ("+Math.abs(moment(lastUpload).diff(Date.now(), 'days'))+" days), hasTextEndTag="+hasTextEndTag+", hasEndLabel="+hasEndLabel+" gaps="+chapterGapCount+", startsAt="+chapterLow+", lastCh="+mangaInfo.manga.last_chapter+", chHigh="+chapterHigh+", eq="+(mangaInfo.manga.last_chapter.toString() === chapterHigh.toString()));
+                console.log("ID: #"+manga.id+", status="+statusCompleted+", lastUpload="+lastUpload+" ("+Math.abs(moment(lastUpload).diff(Date.now(), 'days'))+" days), hasTextEndTag="+hasTextEndTag+", hasEndLabel="+hasEndLabel+" gaps="+chapterGapCount+", startsAt="+chapterLow+", lastCh="+mangaInfo.manga.last_chapter+", chHigh="+chapterHigh+", eq="+(mangaInfo.manga.last_chapter.toString() === chapterHigh.toString())+", groups=["+allGroups.join(', ')+"]");
                 let condition =
                     !hasTextEndTag // Pollutes the manga chapter name, so we exclude those
                     && hasEndLabel
@@ -509,7 +515,7 @@ function checkManga(manga, archiveWorkerResult)
                     let genres = mangaInfo.manga.genres.map(gen => gen.genre);
 
                     // Spawn a new worker
-                    let worker = new ArchiveWorker({
+                    let worker = new ArchiveWorker(db, {
                         id: manga.id,
                         title: manga.title,
                         url: manga.url,
