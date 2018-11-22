@@ -11,7 +11,7 @@
     "form-data": "^2.3.2",
     "html-entities": "^1.2.1",
     "limiter": "^1.1.2",
-    "mangadex-archive-torrent-processor": "git+https://github.com/Mangadex-Archive-Devs/mangadex-archive-torrent-processor.git",
+    "mangadex-archive-torrent-processor": "git+https://github.com/Mangadex-Archive-Devs/mangadex-archive-torrent-processor.git#dcd9234",
     "mangadex-req": "git+https://github.com/radonthetyrant/mangadex-req.git",
     "moment": "^2.22.0",
     "npm": "^5.8.0",
